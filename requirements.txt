@@ -1,0 +1,9 @@
+pymupdf
+sqlalchemy
+pymysql
+pandas 
+openpyxl 
+xlrd
+python-docx
+pytesseract 
+pillow
