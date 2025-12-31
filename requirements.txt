@@ -9,4 +9,3 @@ pytesseract
 pillow
 dotenv
 watchdog
-docx
