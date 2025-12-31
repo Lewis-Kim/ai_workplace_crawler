@@ -12,6 +12,7 @@ from services.loaders.excel_loader import ExcelLoader  # 🔥 추가
 from services.loaders.csv_loader import CSVLoader
 from services.loaders.docx_loader import DOCXLoader
 from services.loaders.image_ocr_loader import ImageOCRLoader
+from services.utils import file_sha1
 
 LOADER_MAP = {
     "pdf": PDFLoader(),
@@ -26,10 +27,23 @@ LOADER_MAP = {
 }
 
 def ingest_file(file_path: str, source: str, db: Session):
+    
     ext = os.path.splitext(file_path)[1].lower().lstrip(".")
 
     if ext not in LOADER_MAP:
         raise ValueError(f"지원하지 않는 파일 타입: {ext}")
+    
+    # 0️⃣ 파일 해시 계산
+    file_hash = file_sha1(file_path)
+
+    # 1️⃣ 이미 처리된 파일인지 확인
+    exists = db.query(MetaTable).filter(
+        MetaTable.file_hash == file_hash
+    ).first()
+
+    if exists:
+        print(f"[SKIP] duplicate file: {file_path}")
+        return exists.seq_id
 
     loader = LOADER_MAP[ext]
 
@@ -38,7 +52,8 @@ def ingest_file(file_path: str, source: str, db: Session):
         title=os.path.basename(file_path),
         file_type=ext,
         sorce=source,
-        create_dt=datetime.now()
+        create_dt=datetime.now(),
+        file_hash=file_hash
     )
     db.add(meta)
     db.commit()

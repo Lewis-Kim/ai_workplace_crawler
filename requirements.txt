@@ -8,3 +8,4 @@ python-docx
 pytesseract 
 pillow
 dotenv
+watchdog

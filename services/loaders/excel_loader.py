@@ -1,29 +1,45 @@
 import pandas as pd
 from .base import BaseLoader
 
+
 class ExcelLoader(BaseLoader):
     file_type = "excel"
 
     def load(self, file_path: str):
         """
-        Excel → (sheet_row_no, text)
-        sheet_row_no = sheet_index * 100000 + row_index
+        Excel Loader (Streaming-safe)
+        - Sheet 단위
+        - Row 단위
+        - 값 정규화
         """
         xls = pd.ExcelFile(file_path)
         unit_no = 1
 
-        for sheet_idx, sheet_name in enumerate(xls.sheet_names, start=1):
-            df = xls.parse(sheet_name)
+        for sheet_name in xls.sheet_names:
+            # 🔹 dtype=str → 모든 값 문자열화 (노이즈 최소화)
+            df = xls.parse(
+                sheet_name,
+                dtype=str
+            )
 
-            # 컬럼명 문자열화
-            columns = [str(c) for c in df.columns]
+            if df.empty:
+                continue
 
-            for row_idx, row in df.iterrows():
-                values = [
-                    f"{col}: {row[col]}"
-                    for col in columns
-                    if pd.notna(row[col])
-                ]
+            columns = [str(c).strip() for c in df.columns]
+
+            # 🔹 itertuples(): iterrows()보다 훨씬 빠름
+            for row in df.itertuples(index=False):
+                values = []
+
+                for col, val in zip(columns, row):
+                    if val is None:
+                        continue
+
+                    val = str(val).strip()
+                    if not val or val.lower() in ("nan", "nat"):
+                        continue
+
+                    values.append(f"{col}: {val}")
 
                 if not values:
                     continue

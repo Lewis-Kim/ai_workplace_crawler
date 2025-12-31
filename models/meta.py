@@ -9,4 +9,5 @@ class MetaTable(Base):
     title = Column(String(100), comment="제목")
     file_type = Column(String(45), comment="파일타입")
     sorce = Column(String(45), comment="출처")
-    create_dt = Column(DateTime, default=datetime.now, comment="등록일자")
+    create_dt = Column(DateTime, default=datetime.now, comment="등록일자"),
+    file_hash=file_hash   # ✅ 추가
