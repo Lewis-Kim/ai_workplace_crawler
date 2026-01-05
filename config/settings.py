@@ -13,6 +13,23 @@ DB_CHARSET = os.getenv("DB_CHARSET", "utf8mb4")
 
 password = quote_plus(DB_PASSWORD)
 
+# =========================
+# Embedding Engine
+# =========================
+
+# "ollama" | "openai"
+EMBEDDING_PROVIDER = "ollama"
+
+# Ollama
+OLLAMA_EMBED_MODEL = "nomic-embed-text"
+OLLAMA_VECTOR_SIZE = 768
+
+# OpenAI
+OPENAI_EMBED_MODEL = "text-embedding-3-small"
+OPENAI_VECTOR_SIZE = 1536
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+
 def validate_settings():
     missing = [
         k for k, v in {

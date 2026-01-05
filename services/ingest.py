@@ -18,6 +18,33 @@ from services.chunking import chunk_text
 from services.utils.file_hash import file_sha1
 from services.images.image_extractor import extract_images
 
+from qdrant_client import QdrantClient
+from vector.collection_manager import ensure_collection
+from vector.realtime_vector import insert_vector
+
+
+# =================================================
+# 🔧 Qdrant / Embedding 설정 (🔥 핵심)
+# =================================================
+QDRANT_HOST = "192.168.50.32"
+QDRANT_PORT = 6333
+
+BASE_COLLECTION = "documents"
+MODEL_KEY = "nomic"   # ⭐ 모델 변경은 여기만
+
+qdrant_client = QdrantClient(
+    host=QDRANT_HOST,
+    port=QDRANT_PORT,
+    timeout=30
+)
+
+# 🚀 앱 시작 시 1회만 실행
+COLLECTION_NAME = ensure_collection(
+    client=qdrant_client,
+    base_collection=BASE_COLLECTION,
+    model_key=MODEL_KEY
+)
+
 
 # =================================================
 # logging 설정
@@ -138,7 +165,7 @@ def ingest_file(file_path: str, source: str, db: Session):
     )
 
     # -------------------------------------------------
-    # 6️⃣ 텍스트 로드 + chunk → content INSERT
+    # 6️⃣ 텍스트 로드 → chunk → DB + 🔥 Vector Insert
     # -------------------------------------------------
     loader = LOADER_MAP[ext]
 
@@ -154,14 +181,32 @@ def ingest_file(file_path: str, source: str, db: Session):
 
         for idx, chunk in enumerate(chunks, start=1):
             chunk_count += 1
-            db.add(ContentTable(
+
+            content = ContentTable(
                 doc_id=meta.seq_id,
                 page_no=unit_no,
                 chunk_no=idx,
                 content=chunk
-            ))
+            )
+            db.add(content)
+            db.commit()
+            db.refresh(content)
 
-    db.commit()
+            # 🔥 Qdrant Vector Insert (컬렉션/모델 명시)
+            try:
+                insert_vector(
+                    collection_name=COLLECTION_NAME,
+                    model_key=MODEL_KEY,
+                    content_id=content.content_id,
+                    doc_id=meta.seq_id,
+                    page_no=unit_no,
+                    chunk_no=idx,
+                    text=chunk[:1500],  # 🔒 안전 길이 제한
+                )
+            except Exception as ve:
+                logger.error(
+                    f"[VECTOR FAIL] content_id={content.content_id} | {ve}"
+                )
 
     logger.info(
         f"[STEP 5 DONE] text stored | units={unit_count}, chunks={chunk_count}"

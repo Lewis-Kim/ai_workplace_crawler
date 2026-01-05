@@ -14,4 +14,6 @@ DB_USER=
 DB_PASSWORD=
 DB_CHARSET=utf8mb4
 
+OPENAI_API_KEY=
+
 를 복사해서 디비 정보를 넣고 저장
