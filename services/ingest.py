@@ -135,14 +135,14 @@ def ingest_file(file_path: str, source: str, db: Session):
     # -------------------------------------------------
     # 5️⃣ 이미지 추출 + images INSERT
     # -------------------------------------------------
-    image_root = "images"
-    image_base_path = f"{image_root}/{meta.seq_id}"
+    image_root = "images"    
+    image_dir = f"{image_root}/{meta.seq_id}"
 
     logger.info(f"[STEP 4] image extraction start")
 
     images = extract_images(
         file_path=file_path,
-        output_root=image_root
+        output_dir=image_dir   # ✅ 반드시 doc_id 경로
     )
 
     for idx, img in enumerate(images, start=1):
@@ -153,7 +153,7 @@ def ingest_file(file_path: str, source: str, db: Session):
             doc_id=meta.seq_id,
             page_no=img.get("page"),
             image_no=idx,
-            image_path=f"{image_base_path}/{image_name}",
+            image_path=f"{image_dir}/{image_name}",
             image_name=image_name,
             image_ext=image_ext
         ))

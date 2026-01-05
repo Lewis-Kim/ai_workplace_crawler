@@ -28,6 +28,7 @@ def extract_images_from_pdf(file_path: Path, out_dir: Path) -> List[Dict]:
             xref = img[0]
             base = doc.extract_image(xref)
 
+            fname = f"page{page_idx + 1}_img{img_idx + 1}.{base['ext']}"
             fpath = out_dir / fname
 
             with open(fpath, "wb") as f:
