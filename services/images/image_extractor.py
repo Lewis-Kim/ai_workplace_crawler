@@ -15,10 +15,6 @@ ZIP_MEDIA_PATHS = {
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-def ensure_dir(path: Path):
-    path.mkdir(parents=True, exist_ok=True)
-
-
 # -------------------------------------------------
 # PDF
 # -------------------------------------------------
@@ -32,7 +28,6 @@ def extract_images_from_pdf(file_path: Path, out_dir: Path) -> List[Dict]:
             xref = img[0]
             base = doc.extract_image(xref)
 
-            fname = f"page{page_idx+1}_img{img_idx+1}.{base['ext']}"
             fpath = out_dir / fname
 
             with open(fpath, "wb") as f:
@@ -74,17 +69,21 @@ def extract_images_from_zip(file_path: Path, out_dir: Path) -> List[Dict]:
 # Image file
 # -------------------------------------------------
 def extract_single_image(file_path: Path, out_dir: Path) -> List[Dict]:
-    shutil.copy(file_path, out_dir / file_path.name)
-    return [{"image": file_path.name}]
+    fname = file_path.name
+    shutil.copy(file_path, out_dir / fname)
+    return [{"image": fname}]
 
 
 # -------------------------------------------------
-# Dispatcher
+# Dispatcher (🔥 핵심 수정)
 # -------------------------------------------------
-def extract_images(file_path: str, output_root: str) -> List[Dict]:
+def extract_images(file_path: str, output_dir: str) -> List[Dict]:
+    """
+    output_dir = images/{meta.seq_id}
+    """
     file_path = Path(file_path)
-    out_dir = Path(output_root) / file_path.name
-    ensure_dir(out_dir)
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     ext = file_path.suffix.lower()
 
