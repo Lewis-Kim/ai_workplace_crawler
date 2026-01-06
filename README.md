@@ -169,12 +169,25 @@ pip install -r requirements.txt
 ```env
 DB_HOST=localhost
 DB_PORT=3306
-<<<<<<< HEAD
 DB_NAME=
 DB_USER=
 DB_PASSWORD=
 DB_CHARSET=utf8mb4
 
 OPENAI_API_KEY=
-
+GOOGLE_API_KEY=
+```
 를 복사해서 디비 정보를 넣고 저장
+
+### 5.4 Ollama 설치 및 설정
+-- 외부 연결을 위한 설정
+```bash 
+ollama stop
+또는
+트레이 아이콘 → Ollama 종료
+
+setx OLLAMA_HOST "0.0.0.0"
+
+ollama serve
+
+```

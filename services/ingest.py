@@ -81,7 +81,7 @@ LOADER_MAP = {
 # =================================================
 # ingest main
 # =================================================
-def ingest_file(file_path: str, source: str, db: Session):
+def ingest_file(file_path: str, source: str, db: Session ,folder_name: str | None = None):
 
     logger.info(f"[START] ingest_file | file={file_path}")
 
@@ -122,8 +122,10 @@ def ingest_file(file_path: str, source: str, db: Session):
         title=os.path.basename(file_path),
         file_type=ext,
         sorce=source,
-        create_dt=datetime.now(),
-        file_hash=file_hash
+        file_hash=file_hash,
+        file_path=file_path,
+        folder_name=folder_name,   # ✅ 폴더명 포함
+        create_dt=datetime.now()
     )
 
     db.add(meta)
@@ -202,6 +204,7 @@ def ingest_file(file_path: str, source: str, db: Session):
                     page_no=unit_no,
                     chunk_no=idx,
                     text=chunk[:1500],  # 🔒 안전 길이 제한
+                    folder_name=folder_name,
                 )
             except Exception as ve:
                 logger.error(

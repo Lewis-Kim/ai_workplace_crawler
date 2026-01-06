@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from qdrant_client.models import Distance
 
 
+ENGINE_OPENAI = "openai"
+ENGINE_OLLAMA = "ollama"
+ENGINE_GEMINI = "gemini"   # ⭐ 추가
+
+
 @dataclass(frozen=True)
 class EmbeddingModelConfig:
     key: str
@@ -21,7 +26,7 @@ EMBEDDING_MODELS = {
         vector_size=3072,
         distance=Distance.COSINE,
         version=1,
-        engine="openai"
+        engine=ENGINE_OPENAI
     ),
 
     "nomic": EmbeddingModelConfig(
@@ -30,7 +35,7 @@ EMBEDDING_MODELS = {
         vector_size=768,
         distance=Distance.COSINE,
         version=1,
-        engine="ollama"
+        engine=ENGINE_OLLAMA
     ),
 
     "bge_m3": EmbeddingModelConfig(
@@ -39,6 +44,18 @@ EMBEDDING_MODELS = {
         vector_size=1024,
         distance=Distance.COSINE,
         version=1,
-        engine="ollama"
+        engine=ENGINE_OLLAMA
+    ),
+
+    # -----------------------------
+    # Gemini (Google)
+    # -----------------------------
+    "gemini_embed": EmbeddingModelConfig(
+        key="gemini_embed",
+        model_name="models/embedding-001",
+        vector_size=768,
+        distance=Distance.COSINE,
+        version=1,
+        engine=ENGINE_GEMINI
     ),
 }

@@ -13,3 +13,5 @@ cryptography
 ollama 
 qdrant-client
 openai
+requests
+google-generativeai

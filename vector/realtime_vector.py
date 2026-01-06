@@ -50,6 +50,7 @@ def insert_vector(
     page_no: int,
     chunk_no: int,
     text: str,
+    folder_name: str ,
     extra_payload: Dict[str, Any] | None = None,
 ):
     """
@@ -98,6 +99,7 @@ def insert_vector(
         "page_no": page_no,
         "chunk_no": chunk_no,
         "model_key": model_key,
+        "folder_name": folder_name,
         "text": text,
     }
 

@@ -1,95 +1,36 @@
+from pathlib import Path
 import os
-import time
 
-from config.db import SessionLocal
-from services.ingest import ingest_file
-from services.utils.file_hash import file_sha1
-from services.utils.file_ops import move_file
-from models.meta import MetaTable
+from watcher.file_watcher import IngestHandler, SUPPORTED_EXT
 
 
-SUPPORTED_EXT = {
-    ".pdf", ".txt", ".csv", ".docx",
-    ".xlsx", ".xls",
-    ".jpg", ".jpeg", ".png"
-}
-
-BASE_DIR = "watch_dir"
-PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
-DUPLICATED_DIR = os.path.join(BASE_DIR, "duplicated")
-ERROR_DIR = os.path.join(BASE_DIR, "error")
-
-
-def batch_ingest_folder(folder_path: str):
+def batch_ingest_folder(root_dir: str):
     """
-    폴더 내 기존 파일 전체 ingest (운영용)
-    - 중복 파일 분리
-    - 성공/실패 파일 이동
+    서버 시작 시 incoming 디렉터리 초기 스캔
+    - 폴더 → IngestHandler._handle_directory
+    - 파일 → IngestHandler._handle_file
+    ⚠ ingest 로직은 절대 여기서 구현하지 않는다
     """
-    print(f"[BATCH] scanning folder: {folder_path}")
 
-    files = sorted(
-        f for f in os.listdir(folder_path)
-        if os.path.splitext(f)[1].lower() in SUPPORTED_EXT
-    )
+    print(f"[BATCH] scanning existing contents: {root_dir}")
 
-    for filename in files:
-        file_path = os.path.join(folder_path, filename)
+    handler = IngestHandler()
+    root = Path(root_dir)
 
-        # 🔹 파일 준비 대기 (복사 중 방지)
-        if not _wait_until_ready(file_path):
-            print(f"[BATCH SKIP] not ready: {filename}")
-            continue
+    if not root.exists():
+        print(f"[BATCH] directory not found: {root_dir}")
+        return
 
-        db = SessionLocal()
-        try:
-            # 🔹 중복 체크
-            file_hash = file_sha1(file_path)
-            exists = db.query(MetaTable).filter(
-                MetaTable.file_hash == file_hash
-            ).first()
+    # 1️⃣ 최상위 폴더 먼저 처리
+    for entry in sorted(root.iterdir()):
+        if entry.is_dir():
+            print(f"[BATCH] found directory: {entry}")
+            handler._handle_directory(str(entry))
 
-            if exists:
-                move_file(file_path, DUPLICATED_DIR)
-                print(f"[BATCH DUPLICATE] {filename}")
-                continue
+    # 2️⃣ incoming 루트에 바로 있는 파일 처리
+    for entry in sorted(root.iterdir()):
+        if entry.is_file() and entry.suffix.lower() in SUPPORTED_EXT:
+            print(f"[BATCH] found file: {entry}")
+            handler._handle_file(str(entry))
 
-            # 🔹 ingest
-            ingest_file(
-                file_path=file_path,
-                source="batch",
-                db=db
-            )
-
-            # 🔹 정상 처리
-            move_file(file_path, PROCESSED_DIR)
-            print(f"[BATCH OK] {filename}")
-
-        except Exception as e:
-            move_file(file_path, ERROR_DIR)
-            print(f"[BATCH FAIL] {filename} -> {e}")
-
-        finally:
-            db.close()
-
-
-def _wait_until_ready(file_path: str, timeout: int = 15) -> bool:
-    """
-    파일 크기 변경이 멈출 때까지 대기
-    """
-    start = time.time()
-    last_size = -1
-
-    while time.time() - start < timeout:
-        try:
-            size = os.path.getsize(file_path)
-        except FileNotFoundError:
-            return False
-
-        if size == last_size:
-            return True
-
-        last_size = size
-        time.sleep(0.5)
-
-    return False
+    print("[BATCH] initial scan completed")
