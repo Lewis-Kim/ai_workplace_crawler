@@ -206,3 +206,9 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 *.pdf
+
+# images 폴더
+images/
+
+#uploads file 폴더
+watch_dir/
