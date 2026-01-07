@@ -1,5 +1,5 @@
 # vector/realtime_vector.py
-
+import os
 import logging
 from typing import Dict, Any
 
@@ -20,8 +20,8 @@ logger.setLevel(logging.INFO)
 # =================================================
 # Qdrant client (단일 인스턴스)
 # =================================================
-QDRANT_HOST = "192.168.50.32"
-QDRANT_PORT = 6333
+QDRANT_HOST = os.getenv("QDRANT_HOST")
+QDRANT_PORT = os.getenv("QDRANT_PORT")
 
 _qdrant_client: QdrantClient | None = None
 

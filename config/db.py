@@ -30,5 +30,5 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
-print("DB_URL =", DB_URL)
+#print("DB_URL =", DB_URL)
 

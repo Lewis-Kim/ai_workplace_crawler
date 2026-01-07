@@ -208,7 +208,11 @@ __marimo__/
 *.pdf
 
 # images 폴더
-images/
+images/*
 
 #uploads file 폴더
-watch_dir/
+watch_dir/incoming/*
+watch_dir/processing/*
+watch_dir/processed/*
+watch_dir/duplicated/*
+watch_dir/error/*

@@ -28,11 +28,11 @@ from services.text_normalizer import normalize_for_embedding
 # =================================================
 # 🔧 Qdrant / Embedding 설정 (🔥 핵심)
 # =================================================
-QDRANT_HOST = "192.168.50.32"
-QDRANT_PORT = 6333
+QDRANT_HOST = os.getenv("QDRANT_HOST")
+QDRANT_PORT = os.getenv("QDRANT_PORT")
 
-BASE_COLLECTION = "documents"
-MODEL_KEY = "openai_large"   # ⭐ 모델 변경은 여기만
+BASE_COLLECTION = os.getenv("BASE_COLLECTION")
+MODEL_KEY = os.getenv("MODEL_KEY")  
 
 qdrant_client = QdrantClient(
     host=QDRANT_HOST,
