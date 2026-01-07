@@ -167,15 +167,22 @@ pip install -r requirements.txt
 .env 파일 생성:
 
 ```env
-DB_HOST=localhost
+DB_HOST=192.168.50.32
 DB_PORT=3306
-DB_NAME=
-DB_USER=
-DB_PASSWORD=
+DB_NAME=project3
+DB_USER=project3
+DB_PASSWORD=Project3!@
 DB_CHARSET=utf8mb4
 
-OPENAI_API_KEY=
-GOOGLE_API_KEY=
+
+QDRANT_HOST=192.168.50.32
+QDRANT_PORT=6333
+
+BASE_COLLECTION=documents
+MODEL_KEY=openai_large
+
+GOOGLE_API_KEY=4656456464
+OPENAI_API_KEY=22222
 ```
 를 복사해서 디비 정보를 넣고 저장
 
