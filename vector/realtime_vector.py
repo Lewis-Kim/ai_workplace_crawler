@@ -51,6 +51,9 @@ def insert_vector(
     chunk_no: int,
     text: str,
     folder_name: str ,
+    title: str,
+    file_type: str,
+    source: str,
     extra_payload: Dict[str, Any] | None = None,
 ):
     """
@@ -91,16 +94,22 @@ def insert_vector(
         )
 
     # -------------------------------------------------
-    # 2️⃣ Payload 구성
+    # 2️⃣ metadata , Payload 구성
     # -------------------------------------------------
-    payload = {
+    metadata = {
         "content_id": content_id,
         "doc_id": doc_id,
         "page_no": page_no,
         "chunk_no": chunk_no,
         "model_key": model_key,
         "folder_name": folder_name,
-        "text": text,
+        "title": title,
+        "file_type": file_type,
+        "source": source
+    }
+    payload = {        
+        "content": text,
+        "metadata": metadata
     }
 
     if extra_payload:

@@ -25,7 +25,7 @@ EMBEDDING_MODELS = {
         model_name="text-embedding-3-large",
         vector_size=3072,
         distance=Distance.COSINE,
-        version=1,
+        version=2,
         engine=ENGINE_OPENAI
     ),
 
@@ -34,7 +34,7 @@ EMBEDDING_MODELS = {
         model_name="nomic-embed-text",
         vector_size=768,
         distance=Distance.COSINE,
-        version=1,
+        version=2,
         engine=ENGINE_OLLAMA
     ),
 
@@ -57,5 +57,15 @@ EMBEDDING_MODELS = {
         distance=Distance.COSINE,
         version=1,
         engine=ENGINE_GEMINI
+    ),
+    
+     # ⭐ NEW: Gemma 2 Embedding
+    "gemma2_embed": EmbeddingModelConfig(
+        key="gemma2_embed",
+        model_name="embeddinggemma",
+        vector_size=768,
+        distance=Distance.COSINE,
+        version=1,
+        engine=ENGINE_OLLAMA
     ),
 }

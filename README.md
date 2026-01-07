@@ -191,3 +191,5 @@ setx OLLAMA_HOST "0.0.0.0"
 ollama serve
 
 ```
+
+curl -X POST "http://localhost:6333/collections/documents_nomic_v1/points/delete" -H "Content-Type: application/json"  -d '{"filter":{      "must":[]}}'

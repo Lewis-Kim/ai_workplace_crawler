@@ -21,6 +21,8 @@ from services.images.image_extractor import extract_images
 from qdrant_client import QdrantClient
 from vector.collection_manager import ensure_collection
 from vector.realtime_vector import insert_vector
+from services.text_normalizer import normalize_for_embedding
+
 
 
 # =================================================
@@ -30,7 +32,7 @@ QDRANT_HOST = "192.168.50.32"
 QDRANT_PORT = 6333
 
 BASE_COLLECTION = "documents"
-MODEL_KEY = "nomic"   # ⭐ 모델 변경은 여기만
+MODEL_KEY = "openai_large"   # ⭐ 모델 변경은 여기만
 
 qdrant_client = QdrantClient(
     host=QDRANT_HOST,
@@ -121,7 +123,7 @@ def ingest_file(file_path: str, source: str, db: Session ,folder_name: str | Non
     meta = MetaTable(
         title=os.path.basename(file_path),
         file_type=ext,
-        sorce=source,
+        source=source,
         file_hash=file_hash,
         file_path=file_path,
         folder_name=folder_name,   # ✅ 폴더명 포함
@@ -179,16 +181,18 @@ def ingest_file(file_path: str, source: str, db: Session ,folder_name: str | Non
     for unit_no, text in loader.load(file_path):
         unit_count += 1
 
-        chunks = chunk_text(text)
+        chunks = chunk_text(text)        
 
         for idx, chunk in enumerate(chunks, start=1):
+            
+            clean_chunk = normalize_for_embedding(chunk)
             chunk_count += 1
 
             content = ContentTable(
                 doc_id=meta.seq_id,
                 page_no=unit_no,
                 chunk_no=idx,
-                content=chunk
+                content=clean_chunk
             )
             db.add(content)
             db.commit()
@@ -203,8 +207,11 @@ def ingest_file(file_path: str, source: str, db: Session ,folder_name: str | Non
                     doc_id=meta.seq_id,
                     page_no=unit_no,
                     chunk_no=idx,
-                    text=chunk[:1500],  # 🔒 안전 길이 제한
+                    text=clean_chunk[:1500],  # 🔒 안전 길이 제한
                     folder_name=folder_name,
+                    title=os.path.basename(file_path),
+                    file_type=ext,
+                    source=source
                 )
             except Exception as ve:
                 logger.error(
