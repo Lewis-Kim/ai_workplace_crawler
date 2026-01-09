@@ -1,0 +1,36 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.layout {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+/* 좌측 사이드바 */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;     /* 🔥 줄어들지 않게 */
+}
+
+/* 우측 영역 */
+.content {
+  flex: 1;            /* 🔥 남은 영역 전부 사용 */
+  width: 100%;
+  height: 100%;
+  padding: 0;         /* ❗ 패딩 제거 */
+  margin: 0;
+  overflow: hidden;   /* 스크롤 제거 */
+}
+
+/* iframe 자체 */
+#contentFrame {
+  display: block;     /* inline 요소 제거 */
+  width: 100%;        /* 🔥 가로 100% */
+  height: auto;       /* 높이는 postMessage로 제어 */
+  border: none;
+}

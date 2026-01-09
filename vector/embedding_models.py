@@ -67,5 +67,11 @@ EMBEDDING_MODELS = {
         distance=Distance.COSINE,
         version=1,
         engine=ENGINE_OLLAMA
-    ),
+    ),   
+    
 }
+
+def get_embedding_config(model_key: str) -> EmbeddingModelConfig:
+    if model_key not in EMBEDDING_MODELS:
+        raise ValueError(f"Unknown embedding model_key: {model_key}")
+    return EMBEDDING_MODELS[model_key]

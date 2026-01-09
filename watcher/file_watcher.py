@@ -10,18 +10,21 @@ from services.utils.file_hash import file_sha1
 from services.utils.file_ops import move_file
 from models.meta import MetaTable
 from models.folder_status import FolderStatus
+from pipeline import status_store
+
 
 
 # ==========================
 # 설정
 # ==========================
-BASE_DIR = "watch_dir"
 
-INCOMING_DIR = os.path.join(BASE_DIR, "incoming")
-PROCESSING_DIR = os.path.join(BASE_DIR, "processing")
-PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
-DUPLICATED_DIR = os.path.join(BASE_DIR, "duplicated")
-ERROR_DIR = os.path.join(BASE_DIR, "error")
+from config.paths import (
+    INCOMING_DIR,
+    PROCESSING_DIR,
+    PROCESSED_DIR,
+    DUPLICATED_DIR,
+    ERROR_DIR,
+)
 
 SUPPORTED_EXT = {
     ".pdf", ".txt", ".csv", ".docx",
@@ -291,3 +294,24 @@ class IngestHandler(FileSystemEventHandler):
             return (count, total)
         except Exception:
             return None
+        
+        
+    def _handle(self, file_path: str):
+        filename = os.path.basename(file_path)
+        tracking_id, _ = os.path.splitext(filename)
+
+        # 처리 시작
+        status_store.update(tracking_id, status_store.PROCESSING)
+
+        try:
+            ingest_file(file_path)
+            status_store.update(tracking_id, status_store.COMPLETED)
+
+        except Exception as e:
+            status_store.update(
+                tracking_id,
+                status_store.FAILED,
+                error=str(e),
+            )
+            raise
+

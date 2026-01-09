@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>DataWave Dashboard</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <h2>📂 DataWave</h2>
+        <ul>
+            <li onclick="loadPage('/dashboard')">🏠 대시보드</li>
+            <li onclick="loadPage('/upload')">📤 업로드</li>
+            <li onclick="loadPage('/search')">🔍 검색</li>
+            <li onclick="loadPage('/rag')">🧠 RAG</li>
+        </ul>
+    </aside>
+
+    <main class="content">
+        <iframe
+            id="contentFrame"
+            src="/dashboard"
+            frameborder="0"
+            scrolling="no"
+        ></iframe>
+    </main>
+
+</div>
+
+<script src="/static/js/main.js"></script>
+
+<script>
+window.addEventListener("message", (event) => {
+    if (event.data?.type === "resize-iframe") {
+        const iframe = document.getElementById("contentFrame");
+        iframe.style.height = event.data.height + "px";
+    }
+});
+</script>
+
+</body>
+</html>

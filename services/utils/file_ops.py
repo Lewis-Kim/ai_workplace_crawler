@@ -71,3 +71,14 @@ def move_file(
             time.sleep(wait_sec)
 
     raise PermissionError(f"Failed to move file after retries: {src}")
+
+def resolve_duplicate_filename(directory: str, filename: str) -> str:
+    name, ext = os.path.splitext(filename)
+    counter = 1
+    candidate = filename
+
+    while os.path.exists(os.path.join(directory, candidate)):
+        candidate = f"{name} ({counter}){ext}"
+        counter += 1
+
+    return candidate

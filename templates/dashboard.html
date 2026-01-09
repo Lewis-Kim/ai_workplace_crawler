@@ -1,0 +1,147 @@
+<!-- =========================
+     Dashboard (iframe content)
+     ========================= -->
+
+<style>
+.dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.dashboard h1 {
+  margin-bottom: 20px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.stat-card h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.stat-card .value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #111827;
+}
+
+.stat-card.ok .value { color: #16a34a; }
+.stat-card.warn .value { color: #f59e0b; }
+.stat-card.err .value { color: #dc2626; }
+
+.section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.section h2 {
+  margin-top: 0;
+}
+
+.log {
+  background: #111827;
+  color: #e5e7eb;
+  font-size: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.log .error { color: #f87171; }
+.log .info { color: #60a5fa; }
+.log .success { color: #4ade80; }
+</style>
+
+<div class="dashboard">
+
+  <h1>📊 Dashboard</h1>
+
+  <!-- KPI -->
+  <div class="stats">
+    <div class="stat-card ok">
+      <h3>총 문서 수</h3>
+      <div class="value" id="totalDocs">-</div>
+    </div>
+    <div class="stat-card ok">
+      <h3>정상 처리</h3>
+      <div class="value" id="successDocs">-</div>
+    </div>
+    <div class="stat-card warn">
+      <h3>중복 파일</h3>
+      <div class="value" id="dupDocs">-</div>
+    </div>
+    <div class="stat-card err">
+      <h3>에러</h3>
+      <div class="value" id="errorDocs">-</div>
+    </div>
+  </div>
+
+  <!-- System Status -->
+  <div class="section">
+    <h2>⚙ System Status</h2>
+    <ul>
+      <li>📦 Ingest Service: <b style="color:green">RUNNING</b></li>
+      <li>🧠 Vector DB (Qdrant): <b style="color:green">CONNECTED</b></li>
+      <li>🤖 Embedding Model: <b>openai / ollama</b></li>
+    </ul>
+  </div>
+
+  <!-- Recent Logs -->
+  <div class="section">
+    <h2>📜 Recent Logs</h2>
+    <div class="log" id="logBox">loading...</div>
+  </div>
+
+</div>
+
+<script>
+async function loadDashboard() {
+  try {
+    const res = await fetch("/api/dashboard/summary");
+    const data = await res.json();
+
+    document.getElementById("totalDocs").textContent = data.total;
+    document.getElementById("successDocs").textContent = data.success;
+    document.getElementById("dupDocs").textContent = data.duplicated;
+    document.getElementById("errorDocs").textContent = data.error;
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function loadLogs() {
+  const res = await fetch("/api/logs?limit=50");
+  const data = await res.json();
+
+  const box = document.getElementById("logBox");
+  box.innerHTML = data.logs.map(line => {
+    if (line.includes("[ERROR]")) return `<div class="error">${line}</div>`;
+    if (line.includes("[INFO]")) return `<div class="info">${line}</div>`;
+    return `<div>${line}</div>`;
+  }).join("");
+
+  // iframe 높이 자동 재조정 트리거
+  window.dispatchEvent(new Event("resize"));
+}
+
+loadDashboard();
+loadLogs();
+setInterval(loadLogs, 3000);
+</script>

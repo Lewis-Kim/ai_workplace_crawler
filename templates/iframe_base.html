@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/css/iframe.css">
+</head>
+<body>
+
+<div id="iframe-root">
+    {{ content | safe }}
+</div>
+
+<script>
+function resizeParent() {
+    const height = document.documentElement.scrollHeight;
+    window.parent.postMessage(
+        { type: "resize-iframe", height },
+        "*"
+    );
+}
+
+window.addEventListener("load", resizeParent);
+window.addEventListener("resize", resizeParent);
+
+const observer = new MutationObserver(resizeParent);
+observer.observe(document.getElementById("iframe-root"), {
+    childList: true,
+    subtree: true
+});
+</script>
+
+</body>
+</html>

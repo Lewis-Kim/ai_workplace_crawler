@@ -125,9 +125,8 @@ CREATE TABLE `content_table` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`content_id`),
   KEY `idx_doc` (`doc_id`),
-  FULLTEXT KEY `ft_content` (`content`),
-  CONSTRAINT `fk_doc` FOREIGN KEY (`doc_id`) REFERENCES `meta_table` (`seq_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1317 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  FULLTEXT KEY `ft_content` (`content`)
+) ENGINE=InnoDB AUTO_INCREMENT=2458 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 ```
 ### 4.3 images (이미지 메타)
@@ -150,6 +149,27 @@ CREATE TABLE `images` (
   KEY `idx_images_doc_id` (`doc_id`),
   CONSTRAINT `fk_images_meta` FOREIGN KEY (`doc_id`) REFERENCES `meta_table` (`seq_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=72 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+### 4.4 폴더 상태 (이미지 메타)
+```sql
+-- project3.folder_status definition
+
+CREATE TABLE `folder_status` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `folder_key` varchar(500) NOT NULL,
+  `folder_name` varchar(255) NOT NULL,
+  `source` varchar(50) DEFAULT 'watcher',
+  `status` varchar(20) NOT NULL DEFAULT 'NEW',
+  `total_files` int NOT NULL DEFAULT '0',
+  `processed_files` int NOT NULL DEFAULT '0',
+  `error_files` int NOT NULL DEFAULT '0',
+  `started_at` datetime DEFAULT NULL,
+  `finished_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_folder_key` (`folder_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 ## 5. 설치 방법
 ### 5.1 Python 가상환경 생성

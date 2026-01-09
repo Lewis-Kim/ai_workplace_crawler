@@ -17,35 +17,39 @@ from services.loaders.image_ocr_loader import ImageOCRLoader
 from services.chunking import chunk_text
 from services.utils.file_hash import file_sha1
 from services.images.image_extractor import extract_images
-
-from qdrant_client import QdrantClient
-from vector.collection_manager import ensure_collection
-from vector.realtime_vector import insert_vector
 from services.text_normalizer import normalize_for_embedding
 
+from vector.collection_manager import ensure_collection
+from vector.realtime_vector import insert_vector, get_qdrant_client
 
 
 # =================================================
-# 🔧 Qdrant / Embedding 설정 (🔥 핵심)
+# 🔧 Qdrant / Collection (Lazy Init + Safe)
 # =================================================
-QDRANT_HOST = os.getenv("QDRANT_HOST")
-QDRANT_PORT = os.getenv("QDRANT_PORT")
+_COLLECTION_NAME: str | None = None
+BASE_COLLECTION: str = os.getenv("BASE_COLLECTION", "document")
 
-BASE_COLLECTION = os.getenv("BASE_COLLECTION")
-MODEL_KEY = os.getenv("MODEL_KEY")  
 
-qdrant_client = QdrantClient(
-    host=QDRANT_HOST,
-    port=QDRANT_PORT,
-    timeout=30
-)
+def get_collection_name(
+    *,
+    base_collection: str,
+    model_key: str,
+) -> str:
+    """
+    Qdrant collection name을 안전하게 1회 생성/검증 후 재사용
+    """
+    global _COLLECTION_NAME
 
-# 🚀 앱 시작 시 1회만 실행
-COLLECTION_NAME = ensure_collection(
-    client=qdrant_client,
-    base_collection=BASE_COLLECTION,
-    model_key=MODEL_KEY
-)
+    if _COLLECTION_NAME is None:
+        client = get_qdrant_client()
+        _COLLECTION_NAME = ensure_collection(
+            client=client,
+            base_collection=base_collection,
+            model_key=model_key,
+        )
+        logger.info(f"[INGEST] collection resolved: {_COLLECTION_NAME}")
+
+    return _COLLECTION_NAME
 
 
 # =================================================
@@ -83,29 +87,46 @@ LOADER_MAP = {
 # =================================================
 # ingest main
 # =================================================
-def ingest_file(file_path: str, source: str, db: Session ,folder_name: str | None = None):
+def ingest_file(
+    file_path: str,
+    source: str,
+    db: Session,
+    folder_name: str | None = None,
+    *,
+    base_collection: str = BASE_COLLECTION,
+    model_key: str | None = None,
+) -> int:
+    """
+    단일 파일 ingest
+    (meta → content → vector)
+    """
 
     logger.info(f"[START] ingest_file | file={file_path}")
 
     # -------------------------------------------------
-    # 1️⃣ 파일 타입 확인
+    # 0️⃣ model_key 확보
+    # -------------------------------------------------
+    if model_key is None:
+        model_key = os.getenv("MODEL_KEY")
+
+    if not model_key:
+        raise RuntimeError("MODEL_KEY is not set (env or argument)")
+
+    # -------------------------------------------------
+    # 1️⃣ 파일 타입
     # -------------------------------------------------
     ext = os.path.splitext(file_path)[1].lower().lstrip(".")
 
     if ext not in LOADER_MAP:
-        logger.error(f"[STOP] unsupported file type: {ext}")
         raise ValueError(f"지원하지 않는 파일 타입: {ext}")
 
-    logger.info(f"[STEP 1] file type detected: {ext}")
-
     # -------------------------------------------------
-    # 2️⃣ 파일 해시 계산
+    # 2️⃣ 해시
     # -------------------------------------------------
     file_hash = file_sha1(file_path)
-    logger.info(f"[STEP 2] file hash calculated: {file_hash}")
 
     # -------------------------------------------------
-    # 3️⃣ 중복 파일 체크
+    # 3️⃣ 중복 체크
     # -------------------------------------------------
     exists = db.query(MetaTable).filter(
         MetaTable.file_hash == file_hash
@@ -113,12 +134,12 @@ def ingest_file(file_path: str, source: str, db: Session ,folder_name: str | Non
 
     if exists:
         logger.warning(
-            f"[SKIP] duplicate file | file={file_path}, doc_id={exists.seq_id}"
+            f"[SKIP] duplicate | file={file_path}, doc_id={exists.seq_id}"
         )
         return exists.seq_id
 
     # -------------------------------------------------
-    # 4️⃣ meta_table INSERT
+    # 4️⃣ meta insert
     # -------------------------------------------------
     meta = MetaTable(
         title=os.path.basename(file_path),
@@ -126,101 +147,90 @@ def ingest_file(file_path: str, source: str, db: Session ,folder_name: str | Non
         source=source,
         file_hash=file_hash,
         file_path=file_path,
-        folder_name=folder_name,   # ✅ 폴더명 포함
-        create_dt=datetime.now()
+        folder_name=folder_name,
+        create_dt=datetime.now(),
     )
 
     db.add(meta)
     db.commit()
     db.refresh(meta)
 
-    logger.info(f"[STEP 3] meta inserted | doc_id={meta.seq_id}")
+    logger.info(f"[META] inserted | doc_id={meta.seq_id}")
 
     # -------------------------------------------------
-    # 5️⃣ 이미지 추출 + images INSERT
+    # 5️⃣ 이미지 추출
     # -------------------------------------------------
-    image_root = "images"    
+    image_root = "images"
     image_dir = f"{image_root}/{meta.seq_id}"
-
-    logger.info(f"[STEP 4] image extraction start")
 
     images = extract_images(
         file_path=file_path,
-        output_dir=image_dir   # ✅ 반드시 doc_id 경로
+        output_dir=image_dir,
     )
 
     for idx, img in enumerate(images, start=1):
         image_name = img["image"]
         image_ext = os.path.splitext(image_name)[1].lstrip(".")
 
-        db.add(ImageTable(
-            doc_id=meta.seq_id,
-            page_no=img.get("page"),
-            image_no=idx,
-            image_path=f"{image_dir}/{image_name}",
-            image_name=image_name,
-            image_ext=image_ext
-        ))
+        db.add(
+            ImageTable(
+                doc_id=meta.seq_id,
+                page_no=img.get("page"),
+                image_no=idx,
+                image_path=f"{image_dir}/{image_name}",
+                image_name=image_name,
+                image_ext=image_ext,
+            )
+        )
 
     db.commit()
 
-    logger.info(
-        f"[STEP 4 DONE] images inserted | count={len(images)}"
-    )
-
     # -------------------------------------------------
-    # 6️⃣ 텍스트 로드 → chunk → DB + 🔥 Vector Insert
+    # 6️⃣ 텍스트 → chunk → DB + Vector
     # -------------------------------------------------
     loader = LOADER_MAP[ext]
 
-    unit_count = 0
+    collection_name = get_collection_name(
+        base_collection=base_collection,
+        model_key=model_key,
+    )
+
     chunk_count = 0
 
-    logger.info("[STEP 5] text loading & chunking start")
-
     for unit_no, text in loader.load(file_path):
-        unit_count += 1
-
-        chunks = chunk_text(text)        
-
-        for idx, chunk in enumerate(chunks, start=1):
-            
-            clean_chunk = normalize_for_embedding(chunk)
+        for idx, chunk in enumerate(chunk_text(text), start=1):
+            clean = normalize_for_embedding(chunk)
             chunk_count += 1
 
             content = ContentTable(
                 doc_id=meta.seq_id,
                 page_no=unit_no,
                 chunk_no=idx,
-                content=clean_chunk
+                content=clean,
             )
             db.add(content)
-            db.commit()
-            db.refresh(content)
+            db.flush()   # content_id 확보
 
-            # 🔥 Qdrant Vector Insert (컬렉션/모델 명시)
             try:
                 insert_vector(
-                    collection_name=COLLECTION_NAME,
-                    model_key=MODEL_KEY,
+                    collection_name=collection_name,
+                    model_key=model_key,
                     content_id=content.content_id,
                     doc_id=meta.seq_id,
                     page_no=unit_no,
                     chunk_no=idx,
-                    text=clean_chunk[:1500],  # 🔒 안전 길이 제한
+                    text=clean[:1500],
                     folder_name=folder_name,
-                    title=os.path.basename(file_path),
+                    title=meta.title,
                     file_type=ext,
-                    source=source
+                    source=source,
                 )
             except Exception as ve:
                 logger.error(
                     f"[VECTOR FAIL] content_id={content.content_id} | {ve}"
                 )
 
-    logger.info(
-        f"[STEP 5 DONE] text stored | units={unit_count}, chunks={chunk_count}"
-    )
+    db.commit()
 
     # -------------------------------------------------
     # 7️⃣ 완료

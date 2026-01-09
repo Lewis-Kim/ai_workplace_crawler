@@ -9,17 +9,19 @@ from watcher.file_watcher import IngestHandler
 # ==========================
 # 설정
 # ==========================
-BASE_DIR = "watch_dir"
-
-INCOMING_DIR = os.path.join(BASE_DIR, "incoming")
-PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
-DUPLICATED_DIR = os.path.join(BASE_DIR, "duplicated")
-ERROR_DIR = os.path.join(BASE_DIR, "error")
+from config.paths import (
+    INCOMING_DIR,
+    PROCESSING_DIR,
+    PROCESSED_DIR,
+    DUPLICATED_DIR,
+    ERROR_DIR,
+)
 
 
 def ensure_directories():
     for d in [
         INCOMING_DIR,
+        PROCESSING_DIR,
         PROCESSED_DIR,
         DUPLICATED_DIR,
         ERROR_DIR,
@@ -64,5 +66,5 @@ def main():
     print("✅ Pipeline stopped cleanly")
 
 
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+    #main()

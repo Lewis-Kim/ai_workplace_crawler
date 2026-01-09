@@ -1,0 +1,13 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+#iframe-root {
+  width: 100%;        /* 🔥 핵심 */
+  max-width: none;    /* ❗ 제한 제거 */
+  padding: 24px;
+  box-sizing: border-box;
+}
