@@ -1,0 +1,326 @@
+<div class="chat-container">
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h1>🧠 RAG AI Assistant</h1>
+        <p style="font-size: 14px; color: var(--text-muted);">업로드된 문서를 기반으로 질문에 답변합니다.</p>
+    </div>
+
+    <div class="card chat-messages" id="chatBox">
+        <div class="message bot">
+            <div class="bot-avatar">🤖</div>
+            <div class="bot-content">
+                안녕하세요! 무엇을 도와드릴까요?<br>
+                업로드된 문서를 바탕으로 질문에 답변해 드릴 수 있습니다.
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-input-area">
+        <div style="position: relative;">
+            <textarea id="questionInput" rows="3" placeholder="질문을 입력하세요... (Shift+Enter로 줄바꿈)" style="width: 100%; resize: none; padding-right: 70px;"></textarea>
+            <button class="btn btn-primary send-btn" onclick="sendQuestion()" id="sendBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.chat-messages {
+    min-height: 400px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.message {
+    margin-bottom: 16px;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.message.user .user-content {
+    background: var(--primary);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 16px 16px 4px 16px;
+    max-width: 80%;
+    line-height: 1.5;
+}
+
+.message.bot {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.bot-avatar {
+    width: 36px;
+    height: 36px;
+    background: var(--bg-card-hover);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.bot-content {
+    background: var(--bg-card-hover);
+    padding: 12px 16px;
+    border-radius: 4px 16px 16px 16px;
+    max-width: 85%;
+    line-height: 1.6;
+}
+
+.sources-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.sources-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.source-item {
+    font-size: 12px;
+    padding: 8px 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.source-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+}
+
+.source-title {
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.source-meta {
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.send-btn {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    padding: 10px;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+}
+
+.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 8px 0;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-8px); }
+}
+</style>
+
+<script>
+let isProcessing = false;
+
+async function sendQuestion() {
+    if (isProcessing) return;
+    
+    const input = document.getElementById("questionInput");
+    const text = input.value.trim();
+    if (!text) return;
+
+    const chatBox = document.getElementById("chatBox");
+    const sendBtn = document.getElementById("sendBtn");
+    
+    isProcessing = true;
+    sendBtn.disabled = true;
+
+    // User Message
+    const userDiv = document.createElement("div");
+    userDiv.className = "message user";
+    userDiv.innerHTML = `<div class="user-content">${escapeHtml(text)}</div>`;
+    chatBox.appendChild(userDiv);
+    
+    input.value = "";
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    // Loading indicator
+    const loadingDiv = document.createElement("div");
+    loadingDiv.className = "message bot";
+    loadingDiv.id = "loadingMsg";
+    loadingDiv.innerHTML = `
+        <div class="bot-avatar">🤖</div>
+        <div class="bot-content">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+            <span style="font-size: 12px; color: var(--text-muted);">문서 검색 및 답변 생성 중...</span>
+        </div>
+    `;
+    chatBox.appendChild(loadingDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    try {
+        const response = await fetch('/rag/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                question: text,
+                top_k: 5
+            })
+        });
+
+        chatBox.removeChild(loadingDiv);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Bot Response
+        const botDiv = document.createElement("div");
+        botDiv.className = "message bot";
+        
+        let sourcesHtml = '';
+        if (data.sources && data.sources.length > 0) {
+            sourcesHtml = `
+                <div class="sources-section">
+                    <div class="sources-title">📚 참고 문서 (${data.sources.length}건)</div>
+                    ${data.sources.map((s, i) => `
+                        <div class="source-item" onclick="toggleSourceContent(this)">
+                            <div class="source-title">${getFileIcon(s.file_type)} ${s.title || '문서 ' + (i+1)}</div>
+                            <div class="source-meta">페이지 ${s.page_no} · 유사도 ${(s.score * 100).toFixed(1)}%</div>
+                            <div class="source-content" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color); white-space: pre-wrap; color: var(--text-main);">${s.content}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        botDiv.innerHTML = `
+            <div class="bot-avatar">🤖</div>
+            <div class="bot-content">
+                <div style="white-space: pre-wrap;">${formatAnswer(data.answer)}</div>
+                ${sourcesHtml}
+                <div style="margin-top: 12px; font-size: 11px; color: var(--text-muted);">
+                    ${data.llm_provider}/${data.llm_model}
+                </div>
+            </div>
+        `;
+        chatBox.appendChild(botDiv);
+        
+    } catch (error) {
+        console.error('RAG error:', error);
+        
+        if (document.getElementById('loadingMsg')) {
+            chatBox.removeChild(document.getElementById('loadingMsg'));
+        }
+        
+        const errorDiv = document.createElement("div");
+        errorDiv.className = "message bot";
+        errorDiv.innerHTML = `
+            <div class="bot-avatar">⚠️</div>
+            <div class="bot-content" style="border-left: 3px solid var(--error);">
+                죄송합니다. 답변 생성 중 오류가 발생했습니다.<br>
+                <span style="font-size: 12px; color: var(--text-muted);">${error.message}</span>
+            </div>
+        `;
+        chatBox.appendChild(errorDiv);
+    }
+    
+    chatBox.scrollTop = chatBox.scrollHeight;
+    window.dispatchEvent(new Event("resize"));
+    
+    isProcessing = false;
+    sendBtn.disabled = false;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatAnswer(text) {
+    // 기본 마크다운 스타일 적용
+    return escapeHtml(text)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code style="background: var(--bg-dark); padding: 2px 6px; border-radius: 4px;">$1</code>');
+}
+
+function getFileIcon(fileType) {
+    const icons = {
+        'pdf': '📕',
+        'docx': '📘',
+        'doc': '📘',
+        'txt': '📄',
+        'xlsx': '📊',
+        'xls': '📊',
+        'csv': '📊'
+    };
+    return icons[fileType?.toLowerCase()] || '📁';
+}
+
+function toggleSourceContent(el) {
+    const content = el.querySelector('.source-content');
+    if (content) {
+        content.style.display = content.style.display === 'none' ? 'block' : 'none';
+        window.dispatchEvent(new Event("resize"));
+    }
+}
+
+document.getElementById('questionInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendQuestion();
+    }
+});
+</script>

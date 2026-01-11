@@ -1,57 +1,22 @@
-<style>
-  .dropzone {
-    width: 80%;
-    margin: 40px auto;
-    padding: 60px;
-    border: 3px dashed #4a90e2;
-    border-radius: 12px;
-    background: white;
-    text-align: center;
-    color: #666;
-    font-size: 18px;
-    cursor: pointer;
-  }
-  .dropzone.dragover {
-    background: #eaf3ff;
-    border-color: #1c6fd5;
-    color: #1c6fd5;
-  }
-  .status {
-    width: 80%;
-    margin: 20px auto;
-    background: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    font-size: 14px;
-  }
-  .file-item {
-    margin-bottom: 6px;
-  }
-  #logBox {
-    width: 80%;
-    margin: 20px auto;
-    background: #111;
-    color: #ddd;
-    padding: 16px;
-    border-radius: 8px;
-    font-size: 12px;
-    max-height: 300px;
-    overflow: auto;
-  }
-  .error { color: #ff6b6b; }
-  .info { color: #6bc1ff; }
-</style>
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1>📤 파일 업로드</h1>
+    <p style="color: var(--text-muted); margin-bottom: 32px;">문서 파일을 업로드하여 RAG 시스템에 등록하세요.</p>
 
-<h1>📤 Drag & Drop 업로드</h1>
+    <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">📂</div>
+        <div class="dropzone-text">
+            <strong>파일 선택</strong> 또는 여기로 드래그하세요<br>
+            <span style="font-size: 12px; opacity: 0.7; margin-top: 8px; display: block;">지원 형식: PDF, TXT, MD, DOCX</span>
+        </div>
+    </div>
 
-<div class="dropzone" id="dropzone">
-  📂 파일 또는 폴더를 여기에 드래그앤드롭 하세요
+    <div class="status" id="status" style="margin-top: 24px;"></div>
+
+    <div class="card" style="margin-top: 40px;">
+        <h2>📜 처리 로그</h2>
+        <div class="log-container" id="logBox" style="height: 200px;">loading...</div>
+    </div>
 </div>
-
-<div class="status" id="status"></div>
-
-<h2 style="width:80%;margin:30px auto 10px;">📜 System Logs</h2>
-<pre id="logBox">loading...</pre>
 
 <script>
 const dropzone = document.getElementById("dropzone");
@@ -109,7 +74,15 @@ dropzone.addEventListener("drop", async (e) => {
     return;
   }
 
-  statusBox.innerHTML = "⏳ 업로드 중...";
+  statusBox.innerHTML = `
+    <div style="background: var(--bg-card-hover); padding: 16px; border-radius: 8px; border: 1px solid var(--primary);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 20px; height: 20px; border: 2px solid var(--primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <span>${files.length}개 파일 업로드 및 처리 중...</span>
+        </div>
+    </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+  `;
 
   const formData = new FormData();
   files.forEach(f => {
@@ -125,10 +98,13 @@ dropzone.addEventListener("drop", async (e) => {
     const data = await res.json();
 
     statusBox.innerHTML = `
-      ✅ 업로드 완료<br/>
-      파일 수: ${data.files_count}
-      <hr/>
-      ${data.files.map(f => `<div class="file-item">${f}</div>`).join("")}
+      <div class="card" style="border-color: var(--success);">
+          <h3 style="color: var(--success); margin-bottom: 12px;">✅ 업로드 완료</h3>
+          <p>총 ${data.files_count}개 파일이 처리되었습니다.</p>
+          <div class="file-list">
+            ${data.files.map(f => `<div class="file-item">📄 ${f}</div>`).join("")}
+          </div>
+      </div>
     `;
 
     // 🔥 iframe 높이 재계산 트리거
@@ -136,7 +112,12 @@ dropzone.addEventListener("drop", async (e) => {
 
   } catch (err) {
     console.error(err);
-    statusBox.innerHTML = "❌ 업로드 실패";
+    statusBox.innerHTML = `
+        <div class="card" style="border-color: var(--error);">
+            <h3 style="color: var(--error);">❌ 업로드 실패</h3>
+            <p>서버 오류가 발생했습니다. 로그를 확인해주세요.</p>
+        </div>
+    `;
   }
 });
 </script>
@@ -148,10 +129,11 @@ async function loadLogs() {
 
   const box = document.getElementById("logBox");
   box.innerHTML = data.logs.map(line => {
-    if (line.includes("[ERROR]")) return `<span class="error">${line}</span>`;
-    if (line.includes("[INFO]")) return `<span class="info">${line}</span>`;
-    return line;
-  }).join("\n");
+    let className = "log-entry";
+    if (line.includes("[ERROR]")) className += " error";
+    else if (line.includes("[INFO]")) className += " info";
+    return `<div class="${className}">${line}</div>`;
+  }).join("");
 
   // 🔥 로그 갱신 시 iframe 높이 반영
   window.dispatchEvent(new Event("resize"));

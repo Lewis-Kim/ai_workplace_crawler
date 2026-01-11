@@ -52,18 +52,11 @@ def upload():
 
 @router.get("/search", response_class=HTMLResponse)
 def search():
-    body = """
-    <h1>🔍 문서 검색</h1>
-    <input placeholder="검색어 입력">
-    """
-    return render_iframe("Search", body)
+    body = (TEMPLATE_DIR / "search.html").read_text(encoding="utf-8")
+    return render_iframe("문서 검색", body)
 
 
 @router.get("/rag", response_class=HTMLResponse)
-
 def rag():
-    body = """
-    <h1>🧠 RAG 질의</h1>
-    <textarea rows="4" style="width:100%"></textarea>
-    """
-    return render_iframe("RAG", body)
+    body = (TEMPLATE_DIR / "rag.html").read_text(encoding="utf-8")
+    return render_iframe("RAG 질의", body)

@@ -1,36 +1,129 @@
-html, body {
+:root {
+  /* Colors */
+  --bg-dark: #0f172a;
+  --bg-sidebar: #1e293b;
+  --bg-card: #1e293b;
+  --bg-card-hover: #334155;
+  --primary: #3b82f6;
+  --primary-glow: rgba(59, 130, 246, 0.5);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  
+  /* Spacing */
+  --sidebar-width: 260px;
+  
+  /* Transitions */
+  --transition-fast: 0.2s ease;
+  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
   margin: 0;
   padding: 0;
-  width: 100%;
-  height: 100%;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden;
 }
 
 .layout {
   display: flex;
-  width: 100%;
-  height: 100vh;
+  height: 100%;
 }
 
-/* 좌측 사이드바 */
+/* Sidebar Styling */
 .sidebar {
-  width: 220px;
-  flex-shrink: 0;     /* 🔥 줄어들지 않게 */
+  width: var(--sidebar-width);
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+  transition: width var(--transition-smooth);
+  z-index: 10;
 }
 
-/* 우측 영역 */
+.sidebar-header {
+  padding: 0 24px 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.5px;
+}
+
+.nav-menu {
+  list-style: none;
+  padding: 0 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-item {
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  transform: translateX(4px);
+}
+
+.nav-item.active {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1), transparent);
+  color: var(--primary);
+  border-left: 3px solid var(--primary);
+}
+
+.nav-item svg {
+  width: 20px;
+  height: 20px;
+  opacity: 0.8;
+}
+
+.nav-item:hover svg {
+  opacity: 1;
+}
+
+/* Content Area */
 .content {
-  flex: 1;            /* 🔥 남은 영역 전부 사용 */
+  flex: 1;
+  position: relative;
+  background: radial-gradient(circle at top right, #1e293b 0%, #0f172a 40%);
+}
+
+#contentFrame {
   width: 100%;
   height: 100%;
-  padding: 0;         /* ❗ 패딩 제거 */
-  margin: 0;
-  overflow: hidden;   /* 스크롤 제거 */
-}
-
-/* iframe 자체 */
-#contentFrame {
-  display: block;     /* inline 요소 제거 */
-  width: 100%;        /* 🔥 가로 100% */
-  height: auto;       /* 높이는 postMessage로 제어 */
   border: none;
+  display: block;
 }

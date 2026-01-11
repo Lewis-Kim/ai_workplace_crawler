@@ -1,0 +1,191 @@
+<div class="search-container">
+    <div style="text-align: center; margin-bottom: 40px;">
+        <h1>🔍 지능형 문서 검색</h1>
+        <p style="color: var(--text-muted);">키워드, 문맥, 혹은 자연어로 문서 내용을 검색하세요.</p>
+    </div>
+
+    <!-- 검색 옵션 -->
+    <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+        <select id="fileTypeFilter" style="padding: 8px 12px; min-width: 120px;">
+            <option value="">전체 파일</option>
+            <option value="pdf">PDF</option>
+            <option value="docx">DOCX</option>
+            <option value="txt">TXT</option>
+            <option value="xlsx">Excel</option>
+            <option value="csv">CSV</option>
+        </select>
+        <select id="topKSelect" style="padding: 8px 12px; min-width: 100px;">
+            <option value="5">5개</option>
+            <option value="10">10개</option>
+            <option value="20">20개</option>
+        </select>
+    </div>
+
+    <div class="search-bar-wrapper">
+        <input type="text" class="search-input" placeholder="검색어를 입력하세요 (예: 프로젝트 기획안...)" id="searchInput">
+        <button class="search-btn" onclick="performSearch()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+        </button>
+    </div>
+
+    <div id="searchResults">
+        <div style="text-align: center; color: var(--text-muted); padding: 40px;">
+            검색 결과가 여기에 표시됩니다.
+        </div>
+    </div>
+</div>
+
+<script>
+async function performSearch() {
+    const query = document.getElementById('searchInput').value.trim();
+    if (!query) return;
+
+    const fileType = document.getElementById('fileTypeFilter').value;
+    const topK = parseInt(document.getElementById('topKSelect').value);
+    const resultsDiv = document.getElementById('searchResults');
+    
+    resultsDiv.innerHTML = `
+        <div style="text-align:center; padding: 40px;">
+            <div style="width: 24px; height: 24px; border: 2px solid var(--primary); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+            검색 중...
+        </div>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+    `;
+
+    try {
+        const requestBody = {
+            query: query,
+            top_k: topK
+        };
+        
+        if (fileType) {
+            requestBody.file_type = fileType;
+        }
+
+        const response = await fetch('/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.total === 0) {
+            resultsDiv.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+                    <p>"${query}"에 대한 검색 결과가 없습니다.</p>
+                    <p style="font-size: 14px;">다른 키워드로 검색해보세요.</p>
+                </div>
+            `;
+        } else {
+            let html = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin:0;">검색 결과: "${query}"</h3>
+                    <span style="font-size: 12px; padding: 4px 12px; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border-color);">
+                        ${data.total}건 발견
+                    </span>
+                </div>
+            `;
+
+            for (const result of data.results) {
+                const fileIcon = getFileIcon(result.file_type);
+                const scorePercent = (result.score * 100).toFixed(1);
+                const scoreColor = result.score >= 0.8 ? 'var(--success)' : result.score >= 0.6 ? 'var(--warning)' : 'var(--text-muted)';
+                
+                html += `
+                    <div class="card" style="cursor: pointer;" onclick="toggleContent(this)">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <h4 style="color: var(--primary); margin: 0 0 8px; display: flex; align-items: center; gap: 8px;">
+                                ${fileIcon} ${result.title || '제목 없음'}
+                            </h4>
+                            <span style="font-size: 12px; color: ${scoreColor}; font-weight: 600;">${scorePercent}%</span>
+                        </div>
+                        <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin: 0;">
+                            ${highlightQuery(result.content.substring(0, 200), query)}${result.content.length > 200 ? '...' : ''}
+                        </p>
+                        <div class="full-content" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                            <p style="font-size: 14px; color: var(--text-main); line-height: 1.8; white-space: pre-wrap;">${result.content}</p>
+                        </div>
+                        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <span class="tag">Page ${result.page_no}</span>
+                            <span class="tag">Chunk ${result.chunk_no}</span>
+                            ${result.folder_name ? `<span class="tag">📁 ${result.folder_name}</span>` : ''}
+                            <span class="tag">${result.file_type?.toUpperCase() || 'FILE'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+        
+        window.dispatchEvent(new Event("resize"));
+
+    } catch (error) {
+        console.error('Search error:', error);
+        resultsDiv.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--error);">
+                <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                <p>검색 중 오류가 발생했습니다.</p>
+                <p style="font-size: 14px; color: var(--text-muted);">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function getFileIcon(fileType) {
+    const icons = {
+        'pdf': '📕',
+        'docx': '📘',
+        'doc': '📘',
+        'txt': '📄',
+        'xlsx': '📊',
+        'xls': '📊',
+        'csv': '📊',
+        'jpg': '🖼️',
+        'jpeg': '🖼️',
+        'png': '🖼️'
+    };
+    return icons[fileType?.toLowerCase()] || '📁';
+}
+
+function highlightQuery(text, query) {
+    if (!query) return text;
+    const regex = new RegExp(`(${query})`, 'gi');
+    return text.replace(regex, '<b style="color: var(--primary);">$1</b>');
+}
+
+function toggleContent(card) {
+    const fullContent = card.querySelector('.full-content');
+    if (fullContent) {
+        fullContent.style.display = fullContent.style.display === 'none' ? 'block' : 'none';
+        window.dispatchEvent(new Event("resize"));
+    }
+}
+
+document.getElementById('searchInput').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        performSearch();
+    }
+});
+</script>
+
+<style>
+.tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--primary);
+    border-radius: 4px;
+}
+</style>
