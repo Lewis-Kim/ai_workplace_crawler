@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from vector.embedding import embed_text
 from vector.realtime_vector import get_qdrant_client
 from vector.collection_manager import resolve_collection_name
+from config.runtime_settings import runtime_settings
 
 logger = logging.getLogger("rag")
 
@@ -111,9 +112,9 @@ async def rag_chat(req: RAGRequest):
     model_key = os.getenv("MODEL_KEY")
     base_collection = os.getenv("BASE_COLLECTION", "documents")
     
-    # LLM 설정 (환경변수 또는 요청에서)
-    llm_provider = req.llm_provider or os.getenv("LLM_PROVIDER", "openai")
-    llm_model = req.llm_model or os.getenv("LLM_MODEL", "gpt-4o-mini")
+    # LLM 설정 (요청 > 런타임설정 > 환경변수 순서)
+    llm_provider = req.llm_provider or runtime_settings.llm.provider
+    llm_model = req.llm_model or runtime_settings.llm.model
     
     if not model_key:
         raise HTTPException(status_code=500, detail="MODEL_KEY 환경변수가 설정되지 않았습니다")
@@ -220,8 +221,8 @@ async def get_rag_config():
     현재 RAG 설정 조회
     """
     return {
-        "embedding_model": os.getenv("MODEL_KEY"),
-        "llm_provider": os.getenv("LLM_PROVIDER", "openai"),
-        "llm_model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
-        "available_providers": ["openai", "ollama", "gemini"],
+        "embedding_model": runtime_settings.embedding.model_key,
+        "llm_provider": runtime_settings.llm.provider,
+        "llm_model": runtime_settings.llm.model,
+        "available_providers": list(runtime_settings.llm.available_models.keys()),
     }

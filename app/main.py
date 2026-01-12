@@ -15,6 +15,7 @@ from app.api.search import router as search_router
 from app.api.documents import router as documents_router
 from app.api.dashboard import router as dashboard_router
 from app.api.rag import router as rag_router
+from app.api.settings import router as settings_router
 
 print("🔥 MAIN APP LOADED")
 LOG_DIR = Path("../logs")
@@ -47,5 +48,6 @@ app.include_router(search_router)
 app.include_router(documents_router)
 app.include_router(dashboard_router)
 app.include_router(rag_router)
+app.include_router(settings_router)
 
 

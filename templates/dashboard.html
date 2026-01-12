@@ -22,12 +22,54 @@
     </div>
   </div>
 
+  <!-- Pipeline Control -->
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2>🚀 파이프라인 제어</h2>
+        <div id="pipelineStatus" style="display: flex; align-items: center; gap: 8px;">
+            <div id="pipelineIndicator" style="width: 10px; height: 10px; border-radius: 50%; background: #94a3b8;"></div>
+            <span id="pipelineStatusText" style="font-size: 14px; color: var(--text-muted);">확인 중...</span>
+        </div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+        <div class="pipeline-stat">
+            <span class="pipeline-stat-label">상태</span>
+            <span class="pipeline-stat-value" id="pipelineRunning">-</span>
+        </div>
+        <div class="pipeline-stat">
+            <span class="pipeline-stat-label">Observer</span>
+            <span class="pipeline-stat-value" id="observerAlive">-</span>
+        </div>
+        <div class="pipeline-stat">
+            <span class="pipeline-stat-label">시작 시간</span>
+            <span class="pipeline-stat-value" id="pipelineStartedAt">-</span>
+        </div>
+        <div class="pipeline-stat">
+            <span class="pipeline-stat-label">Uptime</span>
+            <span class="pipeline-stat-value" id="pipelineUptime">-</span>
+        </div>
+    </div>
+    
+    <div style="display: flex; gap: 12px;">
+        <button class="btn btn-success" onclick="pipelineAction('start')" id="btnStart">
+            ▶️ 시작
+        </button>
+        <button class="btn btn-warning" onclick="pipelineAction('stop')" id="btnStop">
+            ⏹️ 중지
+        </button>
+        <button class="btn btn-secondary" onclick="pipelineAction('restart')" id="btnRestart">
+            🔄 재시작
+        </button>
+    </div>
+  </div>
+
   <!-- System Status -->
   <div class="card">
     <h2>⚙ 시스템 상태</h2>
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
         <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e;"></div>
+            <div id="ingestIndicator" style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8;"></div>
             <span>Ingest Service</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -62,6 +104,71 @@
     0% { opacity: 1; }
     50% { opacity: 0.4; }
     100% { opacity: 1; }
+}
+
+.pipeline-stat {
+    background: var(--bg-dark);
+    padding: 12px 16px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.pipeline-stat-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.pipeline-stat-value {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: white;
+}
+
+.btn-success:hover {
+    filter: brightness(1.1);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.btn-warning:hover {
+    filter: brightness(1.1);
+}
+
+.btn-secondary {
+    background: var(--bg-card-hover);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-size: 14px;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 </style>
 
@@ -103,7 +210,121 @@ async function loadLogs() {
   window.dispatchEvent(new Event("resize"));
 }
 
+// Pipeline functions
+async function loadPipelineStatus() {
+    try {
+        const res = await fetch('/pipeline/status');
+        const data = await res.json();
+        
+        const isRunning = data.running && data.observer_alive;
+        
+        // Update indicator
+        const indicator = document.getElementById('pipelineIndicator');
+        const statusText = document.getElementById('pipelineStatusText');
+        const ingestIndicator = document.getElementById('ingestIndicator');
+        
+        if (isRunning) {
+            indicator.style.background = '#22c55e';
+            indicator.style.boxShadow = '0 0 8px #22c55e';
+            statusText.textContent = '실행 중';
+            statusText.style.color = '#22c55e';
+            ingestIndicator.style.background = '#22c55e';
+            ingestIndicator.style.boxShadow = '0 0 8px #22c55e';
+        } else {
+            indicator.style.background = '#ef4444';
+            indicator.style.boxShadow = '0 0 8px #ef4444';
+            statusText.textContent = '중지됨';
+            statusText.style.color = '#ef4444';
+            ingestIndicator.style.background = '#ef4444';
+            ingestIndicator.style.boxShadow = 'none';
+        }
+        
+        // Update stats
+        document.getElementById('pipelineRunning').textContent = data.running ? '실행' : '중지';
+        document.getElementById('pipelineRunning').style.color = data.running ? '#22c55e' : '#ef4444';
+        
+        document.getElementById('observerAlive').textContent = data.observer_alive ? '활성' : '비활성';
+        document.getElementById('observerAlive').style.color = data.observer_alive ? '#22c55e' : '#ef4444';
+        
+        if (data.started_at) {
+            const startTime = new Date(data.started_at);
+            document.getElementById('pipelineStartedAt').textContent = startTime.toLocaleTimeString('ko-KR');
+        } else {
+            document.getElementById('pipelineStartedAt').textContent = '-';
+        }
+        
+        if (data.uptime_seconds) {
+            const hours = Math.floor(data.uptime_seconds / 3600);
+            const minutes = Math.floor((data.uptime_seconds % 3600) / 60);
+            const seconds = Math.floor(data.uptime_seconds % 60);
+            document.getElementById('pipelineUptime').textContent = 
+                `${hours}h ${minutes}m ${seconds}s`;
+        } else {
+            document.getElementById('pipelineUptime').textContent = '-';
+        }
+        
+        // Update button states
+        document.getElementById('btnStart').disabled = isRunning;
+        document.getElementById('btnStop').disabled = !isRunning;
+        
+    } catch (e) {
+        console.error('Failed to load pipeline status:', e);
+        document.getElementById('pipelineStatusText').textContent = '연결 실패';
+        document.getElementById('pipelineStatusText').style.color = '#f59e0b';
+    }
+}
+
+async function pipelineAction(action) {
+    const btn = document.getElementById(`btn${action.charAt(0).toUpperCase() + action.slice(1)}`);
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '처리 중...';
+    
+    try {
+        const res = await fetch(`/pipeline/${action}`, { method: 'POST' });
+        const data = await res.json();
+        
+        showToast(`파이프라인 ${action}: ${data.status}`);
+        
+        // Reload status after action
+        setTimeout(loadPipelineStatus, 500);
+        
+    } catch (e) {
+        console.error(`Pipeline ${action} failed:`, e);
+        showToast(`파이프라인 ${action} 실패`, 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        background: ${type === 'error' ? 'var(--error)' : type === 'warning' ? 'var(--warning)' : 'var(--success)'};
+        color: white;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 1001;
+        animation: slideIn 0.3s ease;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 loadDashboard();
 loadLogs();
+loadPipelineStatus();
 setInterval(loadLogs, 3000);
+setInterval(loadPipelineStatus, 5000);
 </script>

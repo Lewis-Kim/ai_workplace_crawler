@@ -43,13 +43,27 @@ DataWave는 조직 내 분산된 다양한 형태의 문서(PDF, Word, Excel 등
 - **통계 요약**: 총 문서 수, 처리 성공, 중복, 에러 상태 시각화
 - **시스템 상태 모니터링**: Ingest Service, Vector DB 연결 상태 및 사용 중인 임베딩 모델 정보 표시
 - **실시간 로그**: 백엔드에서 발생하는 처리 로그를 실시간으로 스트리밍하여 표시
+- **파이프라인 제어**: 
+    - 파이프라인 실행/중지/재시작 버튼
+    - 실시간 상태 표시 (실행 중/중지됨, Observer 활성화, Uptime)
 
 ### 2.5 문서 관리
-- **목록 조회**: 업로드된 전체 문서 리스트 및 상세 정보 조회
+- **목록 조회**: 업로드된 전체 문서 리스트 및 상세 정보 조회 (테이블 UI)
+- **필터링**: 폴더별, 파일 타입별 필터링 기능
+- **상세 정보**: 문서별 청크 수, 이미지 수 표시
 - **삭제 및 관리**: 
     - 개별 문서 삭제 (DB, 벡터 DB, 파일시스템 연동 삭제)
+    - 다중 선택 일괄 삭제 기능 (체크박스)
     - 폴더 단위 일괄 삭제 기능
     - 처리 실패 파일 재처리 대기 관리
+
+### 2.6 환경설정
+- **LLM 모델 선택**: 
+    - Provider 선택 (OpenAI, Ollama, Gemini)
+    - Provider별 모델 목록에서 선택
+- **설정 영구 저장**: DB(system_settings 테이블)에 저장하여 서버 재시작 후에도 유지
+- **기본값 초기화**: 환경변수(.env) 기본값으로 리셋 기능
+- **임베딩 모델 표시**: 현재 사용 중인 임베딩 모델 정보 표시 (읽기 전용)
 
 ## 3. 비기능 요구사항 (Non-Functional Requirements)
 
@@ -108,6 +122,12 @@ DataWave는 조직 내 분산된 다양한 형태의 문서(PDF, Word, Excel 등
 - `GET /api/dashboard/summary`: 시스템 통계 조회
 - `GET /documents`: 문서 목록 및 상세 조회
 - `DELETE /documents/{id}`: 문서 및 관련 데이터 영구 삭제
+- `POST /documents/batch-delete`: 다중 문서 일괄 삭제
+- `GET /pipeline/status`: 파이프라인 상태 조회
+- `POST /pipeline/start|stop|restart`: 파이프라인 제어
+- `GET /settings`: 현재 설정 조회
+- `PUT /settings/llm`: LLM 설정 변경
+- `POST /settings/reset`: 설정 기본값 초기화
 
 ## 7. 기술 스택
 - **Language**: Python 3.14+

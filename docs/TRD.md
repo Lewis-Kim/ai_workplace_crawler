@@ -67,6 +67,13 @@ graph TD
 ### 2.5 프론트엔드
 - **Technologies**: Vanilla JS, HTML5, CSS3, TailwindCSS (optional/standard CSS)
 - **Structure**: Iframe 기반의 모듈형 대시보드 구조
+- **UI 메뉴**:
+    - 대시보드 (통계, 파이프라인 제어, 시스템 상태, 로그)
+    - 업로드 (파일/폴더 업로드)
+    - 검색 (벡터 유사도 검색)
+    - RAG 채팅 (질의응답)
+    - 문서 관리 (meta_table 조회/삭제)
+    - 환경설정 (LLM 모델 선택)
 
 ## 3. API 상세 명세
 ### 3.1 문서 관리 API (`/documents`)
@@ -105,6 +112,14 @@ graph TD
 - `POST /files/upload`: 개별 파일 업로드 (incoming 폴더로 저장)
 - `POST /files/upload-folder-raw`: 폴더 구조를 유지한 다중 파일 업로드
 - `GET /files/status/{tracking_id}`: 파일 처리 상태 추적
+
+### 3.7 설정 API (`/settings`)
+- `GET /settings`: 전체 설정 조회 (LLM, Embedding)
+- `GET /settings/llm`: LLM 설정만 조회
+- `PUT /settings/llm`: LLM 설정 변경
+    - Request: `{ "provider": str, "model": str }`
+    - Response: `{ "success": bool, "current": {...} }`
+- `POST /settings/reset`: 환경변수(.env) 기본값으로 초기화
 
 ## 4. 데이터베이스 설계
 ### 4.1 ERD 요약
@@ -151,6 +166,13 @@ erDiagram
         datetime started_at
         datetime finished_at
     }
+    SYSTEM_SETTINGS {
+        int id PK
+        string setting_key UK
+        string setting_value
+        string description
+        datetime updated_at
+    }
 ```
 
 ### 4.2 테이블 상세
@@ -174,6 +196,15 @@ erDiagram
 | page_no | INT | | 페이지 번호 |
 | chunk_no | INT | | 페이지 내 청크 순번 |
 | content | TEXT | | 청킹된 텍스트 내용 |
+
+#### `system_settings`
+| 컬럼명 | 타입 | 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| id | INT | PK, AI | 설정 고유 ID |
+| setting_key | VARCHAR(100) | UNIQUE | 설정 키 (llm_provider, llm_model 등) |
+| setting_value | VARCHAR(500) | NOT NULL | 설정 값 |
+| description | VARCHAR(255) | | 설정 설명 |
+| updated_at | DATETIME | ON UPDATE | 마지막 수정 일시 |
 
 ## 5. 벡터 DB 설계
 ### 5.1 컬렉션 구조
@@ -269,6 +300,14 @@ AI_WORKPLACE_CRAWLER/
 - `LLM_PROVIDER`: 기본 LLM 제공자 (default: `openai`)
 - `LLM_MODEL`: 기본 LLM 모델명 (default: `gpt-4o-mini`)
 - `BASE_COLLECTION`: 벡터 컬렉션 접두어 (default: `documents`)
+
+### 8.3 런타임 설정 저장
+- **저장 위치**: MySQL `system_settings` 테이블
+- **우선순위**: DB 저장값 > 환경변수(.env) > 기본값
+- **동작 방식**:
+    - 서버 시작 시 DB에서 설정 로드
+    - UI에서 설정 변경 시 메모리 + DB 동시 저장
+    - 서버 재시작 후에도 설정 유지
 
 ## 9. 배포 가이드
 ### 9.1 사전 요구사항

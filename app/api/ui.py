@@ -60,3 +60,15 @@ def search():
 def rag():
     body = (TEMPLATE_DIR / "rag.html").read_text(encoding="utf-8")
     return render_iframe("RAG 질의", body)
+
+
+@router.get("/documents-view", response_class=HTMLResponse)
+def documents_view():
+    body = (TEMPLATE_DIR / "documents.html").read_text(encoding="utf-8")
+    return render_iframe("문서 관리", body)
+
+
+@router.get("/settings-view", response_class=HTMLResponse)
+def settings_view():
+    body = (TEMPLATE_DIR / "settings.html").read_text(encoding="utf-8")
+    return render_iframe("환경설정", body)
