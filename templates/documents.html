@@ -1,3 +1,4 @@
+<script src="/static/js/documents.js" defer></script>
 <div class="documents-container">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <h1>📁 문서 관리</h1>
@@ -57,16 +58,20 @@
 <div id="deleteModal" class="modal" style="display: none;">
     <div class="modal-content">
         <h3>⚠️ 삭제 확인</h3>
-        <p id="deleteMessage">선택한 문서를 삭제하시겠습니까?</p>
-        <p style="font-size: 13px; color: var(--warning);">
+
+        <p id="deleteMessage"></p>
+
+        <p style="font-size:13px;color:var(--warning);margin-top:12px;">
             * MySQL 데이터와 Qdrant 벡터가 함께 삭제됩니다.
         </p>
-        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
-            <button class="btn btn-secondary" onclick="closeModal()">취소</button>
-            <button class="btn btn-danger" onclick="confirmDelete()">삭제</button>
+
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+            <button class="btn btn-secondary" data-action="close">취소</button>
+            <button class="btn btn-danger" data-action="confirm">삭제</button>
         </div>
     </div>
 </div>
+
 
 <style>
 .documents-container {
@@ -169,7 +174,6 @@
     height: 100%;
     background: rgba(0, 0, 0, 0.7);
     display: flex;
-    align-items: center;
     justify-content: center;
     z-index: 1000;
 }
@@ -181,6 +185,8 @@
     padding: 24px;
     min-width: 400px;
     max-width: 500px;
+    min-height: 210px;
+    max-height: 210px;
 }
 
 .modal-content h3 {
@@ -195,246 +201,6 @@ input[type="checkbox"] {
     accent-color: var(--primary);
 }
 </style>
-
-<script>
-let documents = [];
-let selectedIds = new Set();
-let pendingDeleteIds = [];
-
-async function loadDocuments() {
-    const folderFilter = document.getElementById('folderFilter').value;
-    const fileTypeFilter = document.getElementById('fileTypeFilter').value;
-    
-    let url = '/documents?limit=500';
-    if (folderFilter) url += `&folder_name=${encodeURIComponent(folderFilter)}`;
-    if (fileTypeFilter) url += `&file_type=${encodeURIComponent(fileTypeFilter)}`;
-    
-    try {
-        const res = await fetch(url);
-        documents = await res.json();
-        
-        renderTable();
-        updateFolderFilter();
-        document.getElementById('docCount').textContent = `총 ${documents.length}개 문서`;
-    } catch (e) {
-        console.error('Failed to load documents:', e);
-        document.getElementById('docTableBody').innerHTML = `
-            <tr>
-                <td colspan="8" style="text-align: center; padding: 40px; color: var(--error);">
-                    문서 목록을 불러오는데 실패했습니다.
-                </td>
-            </tr>
-        `;
-    }
-    
-    window.dispatchEvent(new Event("resize"));
-}
-
-function renderTable() {
-    const tbody = document.getElementById('docTableBody');
-    
-    if (documents.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
-                    문서가 없습니다.
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = documents.map(doc => `
-        <tr class="${selectedIds.has(doc.seq_id) ? 'selected' : ''}" data-id="${doc.seq_id}">
-            <td>
-                <input type="checkbox" 
-                       ${selectedIds.has(doc.seq_id) ? 'checked' : ''} 
-                       onchange="toggleSelect(${doc.seq_id})">
-            </td>
-            <td style="font-family: monospace; color: var(--text-muted);">${doc.seq_id}</td>
-            <td>
-                <div class="file-icon">
-                    ${getFileIcon(doc.file_type)}
-                    <span style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;">
-                        ${doc.title || '(제목 없음)'}
-                    </span>
-                </div>
-            </td>
-            <td><span class="badge badge-${doc.file_type}">${(doc.file_type || 'unknown').toUpperCase()}</span></td>
-            <td style="color: var(--text-muted); font-size: 13px;">${doc.folder_name || '-'}</td>
-            <td style="text-align: center;">${doc.chunk_count}</td>
-            <td style="text-align: center;">${doc.image_count}</td>
-            <td>
-                <button class="btn btn-danger btn-icon btn-sm" onclick="deleteSingle(${doc.seq_id})" title="삭제">
-                    🗑️
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-function updateFolderFilter() {
-    const select = document.getElementById('folderFilter');
-    const currentValue = select.value;
-    
-    const folders = [...new Set(documents.map(d => d.folder_name).filter(Boolean))];
-    
-    // 기존 옵션 유지하면서 업데이트
-    const existingFolders = new Set([...select.options].slice(1).map(o => o.value));
-    
-    folders.forEach(folder => {
-        if (!existingFolders.has(folder)) {
-            const option = document.createElement('option');
-            option.value = folder;
-            option.textContent = folder;
-            select.appendChild(option);
-        }
-    });
-    
-    select.value = currentValue;
-}
-
-function getFileIcon(fileType) {
-    const icons = {
-        'pdf': '📕',
-        'docx': '📘',
-        'doc': '📘',
-        'txt': '📄',
-        'xlsx': '📊',
-        'xls': '📊',
-        'csv': '📊',
-        'jpg': '🖼️',
-        'jpeg': '🖼️',
-        'png': '🖼️'
-    };
-    return icons[fileType?.toLowerCase()] || '📁';
-}
-
-function toggleSelect(id) {
-    if (selectedIds.has(id)) {
-        selectedIds.delete(id);
-    } else {
-        selectedIds.add(id);
-    }
-    updateSelectedUI();
-    renderTable();
-}
-
-function toggleSelectAll() {
-    const selectAll = document.getElementById('selectAll');
-    
-    if (selectAll.checked) {
-        documents.forEach(doc => selectedIds.add(doc.seq_id));
-    } else {
-        selectedIds.clear();
-    }
-    
-    updateSelectedUI();
-    renderTable();
-}
-
-function updateSelectedUI() {
-    const count = selectedIds.size;
-    document.getElementById('selectedCount').textContent = count;
-    document.getElementById('deleteSelectedBtn').disabled = count === 0;
-    document.getElementById('selectAll').checked = count === documents.length && count > 0;
-}
-
-function deleteSingle(id) {
-    const doc = documents.find(d => d.seq_id === id);
-    pendingDeleteIds = [id];
-    document.getElementById('deleteMessage').innerHTML = `
-        <b>"${doc?.title || '문서 ' + id}"</b>을(를) 삭제하시겠습니까?<br>
-        <span style="font-size: 13px; color: var(--text-muted);">청크 ${doc?.chunk_count || 0}개, 이미지 ${doc?.image_count || 0}개</span>
-    `;
-    document.getElementById('deleteModal').style.display = 'flex';
-}
-
-function deleteSelected() {
-    if (selectedIds.size === 0) return;
-    
-    pendingDeleteIds = [...selectedIds];
-    document.getElementById('deleteMessage').innerHTML = `
-        선택한 <b>${pendingDeleteIds.length}개</b> 문서를 삭제하시겠습니까?
-    `;
-    document.getElementById('deleteModal').style.display = 'flex';
-}
-
-function closeModal() {
-    document.getElementById('deleteModal').style.display = 'none';
-    pendingDeleteIds = [];
-}
-
-async function confirmDelete() {
-    if (pendingDeleteIds.length === 0) return;
-    
-    closeModal();
-    
-    try {
-        if (pendingDeleteIds.length === 1) {
-            // 단일 삭제
-            const res = await fetch(`/documents/${pendingDeleteIds[0]}`, { method: 'DELETE' });
-            const data = await res.json();
-            
-            if (data.success) {
-                showToast(`문서 삭제 완료 (벡터 ${data.deleted_vectors}개 삭제)`);
-            } else {
-                showToast('삭제 실패: ' + data.message, 'error');
-            }
-        } else {
-            // 일괄 삭제
-            const res = await fetch('/documents/batch-delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ doc_ids: pendingDeleteIds })
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                showToast(`${data.total_deleted}개 문서 삭제 완료`);
-            } else {
-                showToast(`${data.total_deleted}개 삭제, ${data.failed.length}개 실패`, 'warning');
-            }
-        }
-        
-        // 선택 초기화 및 새로고침
-        selectedIds.clear();
-        pendingDeleteIds = [];
-        updateSelectedUI();
-        loadDocuments();
-        
-    } catch (e) {
-        console.error('Delete failed:', e);
-        showToast('삭제 중 오류가 발생했습니다.', 'error');
-    }
-}
-
-function showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        background: ${type === 'error' ? 'var(--error)' : type === 'warning' ? 'var(--warning)' : 'var(--success)'};
-        color: white;
-        border-radius: 8px;
-        font-size: 14px;
-        z-index: 1001;
-        animation: slideIn 0.3s ease;
-    `;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-// 초기 로드
-loadDocuments();
-</script>
 
 <style>
 @keyframes slideIn {

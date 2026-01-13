@@ -10,6 +10,7 @@ from vector.embedding import embed_text
 from vector.realtime_vector import get_qdrant_client
 from vector.collection_manager import resolve_collection_name
 from config.runtime_settings import runtime_settings
+from qdrant_client.http.models import SearchRequest
 
 logger = logging.getLogger("rag")
 
@@ -128,8 +129,9 @@ async def rag_chat(req: RAGRequest):
         logger.error(f"[RAG] embedding failed: {e}")
         raise HTTPException(status_code=500, detail=f"임베딩 실패: {str(e)}")
     
-    collection_name = resolve_collection_name(base_collection, model_key)
+    collection_name = resolve_collection_name(base_collection, model_key)    
     client = get_qdrant_client()
+     
     
     try:
         search_result = client.search(
@@ -138,6 +140,8 @@ async def rag_chat(req: RAGRequest):
             limit=req.top_k,
             with_payload=True,
         )
+
+       
     except Exception as e:
         logger.error(f"[RAG] search failed: {e}")
         raise HTTPException(status_code=500, detail=f"검색 실패: {str(e)}")
@@ -188,7 +192,8 @@ async def rag_chat(req: RAGRequest):
 {req.question}
 
 ### 답변:
-위 문서 내용을 바탕으로 질문에 답변해주세요. 문서에 없는 내용은 "문서에서 관련 정보를 찾을 수 없습니다"라고 말씀해주세요."""
+위 문서 내용을 바탕으로 질문에 답변해주세요. 문서에 없는 내용은 "문서에서 관련 정보를 찾을 수 없습니다"라고 말씀해주세요.
+내용이 없을 시 참고 문서는 표시하지 마세요 """
 
     try:
         if llm_provider == "openai":
@@ -226,3 +231,4 @@ async def get_rag_config():
         "llm_model": runtime_settings.llm.model,
         "available_providers": list(runtime_settings.llm.available_models.keys()),
     }
+

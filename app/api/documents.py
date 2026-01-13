@@ -72,7 +72,7 @@ class BatchDeleteResponse(BaseModel):
 async def list_documents(
     folder_name: Optional[str] = None,
     file_type: Optional[str] = None,
-    limit: int = 100,
+    limit: int = 20,
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
