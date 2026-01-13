@@ -6,6 +6,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from qdrant_client.models import Filter, FieldCondition, MatchValue
+
 from vector.embedding import embed_text
 from vector.realtime_vector import get_qdrant_client
 from vector.collection_manager import resolve_collection_name
@@ -85,34 +87,41 @@ async def search_documents(req: SearchRequest):
     collection_name = resolve_collection_name(base_collection, model_key)
     client = get_qdrant_client()
     
-    # 필터 구성
+    # 필터 구성 (qdrant-client 1.16+ API)
     query_filter = None
     must_conditions = []
     
     if req.folder_name:
-        must_conditions.append({
-            "key": "metadata.folder_name",
-            "match": {"value": req.folder_name}
-        })
+        must_conditions.append(
+            FieldCondition(
+                key="metadata.folder_name",
+                match=MatchValue(value=req.folder_name)
+            )
+        )
     
     if req.file_type:
-        must_conditions.append({
-            "key": "metadata.file_type", 
-            "match": {"value": req.file_type}
-        })
+        must_conditions.append(
+            FieldCondition(
+                key="metadata.file_type", 
+                match=MatchValue(value=req.file_type)
+            )
+        )
     
     if must_conditions:
-        query_filter = {"must": must_conditions}
+        query_filter = Filter(must=must_conditions)
     
     try:
-        search_result = client.search(
+        # qdrant-client 1.16+ uses query_points instead of search
+        search_result = client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=req.top_k,
             query_filter=query_filter,
             score_threshold=req.score_threshold,
             with_payload=True,
         )
+        # query_points returns QueryResponse with .points attribute
+        points = search_result.points
     except Exception as e:
         logger.error(f"[SEARCH] qdrant search failed: {e}")
         raise HTTPException(status_code=500, detail=f"검색 실패: {str(e)}")
@@ -121,7 +130,7 @@ async def search_documents(req: SearchRequest):
     # 4️⃣ 결과 변환
     # -------------------------------------------------
     results = []
-    for hit in search_result:
+    for hit in points:
         payload = hit.payload or {}
         metadata = payload.get("metadata", {})
         
@@ -171,13 +180,16 @@ async def get_collection_info(collection_name: str):
     try:
         client = get_qdrant_client()
         info = client.get_collection(collection_name)
+        
+        # qdrant-client 1.16+ API compatibility
+        vectors_config = info.config.params.vectors
         return {
             "name": collection_name,
-            "vectors_count": info.vectors_count,
+            "vectors_count": info.indexed_vectors_count,
             "points_count": info.points_count,
-            "status": info.status.name,
-            "vector_size": info.config.params.vectors.size,
-            "distance": info.config.params.vectors.distance.name,
+            "status": str(info.status),
+            "vector_size": vectors_config.size,
+            "distance": str(vectors_config.distance),
         }
     except Exception as e:
         logger.error(f"[SEARCH] get collection info failed: {e}")

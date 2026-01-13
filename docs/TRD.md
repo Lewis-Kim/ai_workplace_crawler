@@ -119,7 +119,25 @@ graph TD
 - `PUT /settings/llm`: LLM 설정 변경
     - Request: `{ "provider": str, "model": str }`
     - Response: `{ "success": bool, "current": {...} }`
+- `GET /settings/embedding`: Embedding 설정 조회
+- `PUT /settings/embedding`: Embedding 모델 변경
+    - Request: `{ "model_key": str }`
+    - Response: `{ "success": bool, "requires_reindex": bool, "warning": str }`
+    - ⚠️ 모델 변경 시 재인덱싱 필요
+- `POST /settings/embedding/reindex`: Embedding 재인덱싱 실행
+    - Query Params: `doc_id` (선택, 특정 문서만 재인덱싱)
+    - Response: `{ "success": bool, "total_chunks": int, "success_chunks": int }`
+- `GET /settings/verify`: 설정 동기화 상태 검증
 - `POST /settings/reset`: 환경변수(.env) 기본값으로 초기화
+
+#### 사용 가능한 Embedding 모델
+| Model Key | 모델명 | 차원 | 엔진 |
+|-----------|--------|:----:|------|
+| `openai_large` | text-embedding-3-large | 3072 | OpenAI |
+| `nomic` | nomic-embed-text | 768 | Ollama |
+| `bge_m3` | bge-m3 | 1024 | Ollama |
+| `gemini_embed` | embedding-001 | 768 | Gemini |
+| `gemma2_embed` | gemma2 embedding | 768 | Ollama |
 
 ## 4. 데이터베이스 설계
 ### 4.1 ERD 요약
@@ -308,6 +326,93 @@ AI_WORKPLACE_CRAWLER/
     - 서버 시작 시 DB에서 설정 로드
     - UI에서 설정 변경 시 메모리 + DB 동시 저장
     - 서버 재시작 후에도 설정 유지
+
+### 8.4 런타임 설정 적용 범위
+Settings UI에서 변경한 LLM 설정은 다음 컴포넌트에서 실시간으로 적용됩니다:
+
+| 컴포넌트 | 적용 여부 | 설명 |
+|---------|:-------:|------|
+| RAG Chat API (`/rag/chat`) | O | 질의응답 시 LLM provider/model 사용 |
+| Settings API (`/settings/*`) | O | 설정 조회/변경/검증 |
+| 메모리 (RuntimeSettings) | O | 싱글톤 인스턴스로 전역 적용 |
+| Database (system_settings) | O | 영구 저장 및 서버 재시작 후 복원 |
+
+#### 설정 적용 검증 API
+`GET /settings/verify` 엔드포인트를 통해 설정이 시스템 전체에 올바르게 적용되었는지 확인할 수 있습니다.
+
+```json
+// Response 예시
+{
+  "runtime": { "provider": "openai", "model": "gpt-4o-mini" },
+  "database": { "provider": "openai", "model": "gpt-4o-mini", "synced": true },
+  "rag_api": { "provider": "openai", "model": "gpt-4o-mini" },
+  "all_synced": true,
+  "message": "All settings are synchronized"
+}
+```
+
+#### 설정 흐름도
+```
+Settings UI 변경
+      ↓
+PUT /settings/llm 호출
+      ↓
+┌─────────────────────────────────┐
+│  RuntimeSettings.set_llm()      │
+│  ├─ 메모리 업데이트 (즉시 적용)  │
+│  └─ DB 저장 (영구 보존)         │
+└─────────────────────────────────┘
+      ↓
+RAG Chat에서 runtime_settings.llm.provider/model 참조
+      ↓
+선택된 LLM으로 답변 생성
+```
+
+### 8.5 Embedding 모델 변경 시 주의사항
+
+Embedding 모델 변경은 벡터 차원이 다르므로 **재인덱싱이 필수**입니다.
+
+#### 변경 시 발생하는 일
+1. 새로운 Qdrant 컬렉션 생성 (예: `documents_nomic_v2`)
+2. 기존 컬렉션의 데이터는 그대로 유지 (검색 불가)
+3. 환경변수 `MODEL_KEY`가 런타임에서 업데이트됨
+
+#### 재인덱싱 방법
+```bash
+# CLI에서 실행
+python scripts/rebuild_vector_from_db.py --model-key nomic
+
+# 또는 API 호출
+POST /settings/embedding/reindex
+```
+
+#### Embedding 변경 흐름도
+```
+Settings UI에서 Embedding 모델 선택
+      ↓
+PUT /settings/embedding 호출
+      ↓
+┌─────────────────────────────────┐
+│  RuntimeSettings.set_embedding()│
+│  ├─ 메모리 업데이트             │
+│  ├─ DB 저장                     │
+│  └─ 환경변수 MODEL_KEY 업데이트 │
+└─────────────────────────────────┘
+      ↓
+⚠️ 경고: 재인덱싱 필요
+      ↓
+POST /settings/embedding/reindex 호출
+      ↓
+┌─────────────────────────────────┐
+│  rebuild_vectors_async()        │
+│  ├─ 새 컬렉션 생성/확인         │
+│  ├─ content_table 조회          │
+│  ├─ 새 모델로 임베딩 생성       │
+│  └─ Qdrant에 upsert             │
+└─────────────────────────────────┘
+      ↓
+새 모델로 검색 가능
+```
 
 ## 9. 배포 가이드
 ### 9.1 사전 요구사항

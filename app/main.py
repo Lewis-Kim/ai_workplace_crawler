@@ -17,8 +17,11 @@ from app.api.dashboard import router as dashboard_router
 from app.api.rag import router as rag_router
 from app.api.settings import router as settings_router
 
-print("🔥 MAIN APP LOADED")
-LOG_DIR = Path("../logs")
+print("MAIN APP LOADED")
+
+# 프로젝트 루트 기준 로그 경로 설정
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 LOG_FILE = LOG_DIR / "system.log"

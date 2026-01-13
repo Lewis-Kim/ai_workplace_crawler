@@ -44,15 +44,51 @@
         </div>
     </div>
 
-    <!-- Embedding Settings (Read-only) -->
+    <!-- Embedding Settings -->
     <div class="card">
-        <h2>Embedding Model</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Embedding Model Settings</h2>
+            <div id="currentEmbedding" class="current-badge">-</div>
+        </div>
+        
         <div class="setting-group">
-            <label class="setting-label">Current Model</label>
-            <div class="readonly-value" id="embeddingModel">-</div>
-            <div class="setting-hint">
-                Embedding model cannot be changed at runtime. Modify MODEL_KEY in .env to change.
+            <label class="setting-label">Model</label>
+            <select id="embeddingSelect" class="model-select" onchange="onEmbeddingChange()">
+                <option value="">Loading...</option>
+            </select>
+            <div id="embeddingHint" class="setting-hint">Select an embedding model</div>
+        </div>
+        
+        <div class="warning-box" id="embeddingWarning" style="display: none;">
+            <strong>Warning:</strong> Changing embedding model requires re-indexing all documents. 
+            Existing documents will not be searchable until re-indexed.
+        </div>
+        
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+            <button class="btn btn-primary" onclick="saveEmbedding()" id="saveEmbeddingBtn">
+                Save Embedding
+            </button>
+            <button class="btn btn-warning" onclick="startReindex()" id="reindexBtn">
+                Re-index Documents
+            </button>
+        </div>
+        
+        <div id="reindexProgress" style="display: none; margin-top: 16px;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
             </div>
+            <div id="reindexStatus" class="setting-hint">Processing...</div>
+        </div>
+    </div>
+
+    <!-- Settings Application Status -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2>Settings Application Status</h2>
+            <button class="btn btn-secondary btn-sm" onclick="verifySettings()">Verify</button>
+        </div>
+        <div id="applicationStatus">
+            <div class="status-loading">Checking...</div>
         </div>
     </div>
 
@@ -64,8 +100,8 @@
             <li><strong>Ollama</strong>: Local deployment. Requires Ollama server running.</li>
             <li><strong>Gemini</strong>: Requires GOOGLE_API_KEY. Google's LLM offering.</li>
         </ul>
-        <p class="info-note">
-            Settings are stored in memory. Restart will reset to .env defaults.
+        <p class="info-note" style="color: var(--success);">
+            Settings are persisted to database and survive server restarts.
         </p>
     </div>
 </div>
@@ -241,12 +277,124 @@
     font-size: 12px;
     color: var(--warning);
 }
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+}
+
+.status-loading {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--bg-dark);
+    border-radius: 8px;
+}
+
+.status-item.active {
+    border: 1px solid var(--success);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.status-item.inactive {
+    border: 1px solid var(--border-color);
+    opacity: 0.6;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-indicator.green {
+    background: var(--success);
+    box-shadow: 0 0 6px var(--success);
+}
+
+.status-indicator.gray {
+    background: var(--text-muted);
+}
+
+.status-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.status-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.warning-box {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid var(--warning);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--warning);
+    font-size: 13px;
+    margin-top: 16px;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.btn-warning:hover {
+    filter: brightness(1.1);
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-dark);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #60a5fa);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.embedding-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.embedding-option-dim {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-dark);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
 </style>
 
 <script>
 let settings = null;
 let selectedProvider = null;
 let selectedModel = null;
+let selectedEmbedding = null;
+let originalEmbedding = null;
 
 async function loadSettings() {
     try {
@@ -262,10 +410,11 @@ async function loadSettings() {
         updateModelSelect();
         updateCurrentBadge();
         
-        // Embedding (read-only)
-        const embeddingKey = settings.embedding.model_key;
-        const embeddingDesc = settings.embedding.available_models[embeddingKey] || embeddingKey;
-        document.getElementById('embeddingModel').textContent = embeddingDesc;
+        // Embedding
+        selectedEmbedding = settings.embedding.model_key;
+        originalEmbedding = settings.embedding.model_key;
+        updateEmbeddingSelect();
+        updateEmbeddingBadge();
         
     } catch (e) {
         console.error('Failed to load settings:', e);
@@ -329,6 +478,156 @@ function selectProvider(provider) {
 function onModelChange() {
     selectedModel = document.getElementById('modelSelect').value;
     updateCurrentBadge();
+}
+
+// ===================
+// Embedding Functions
+// ===================
+
+function updateEmbeddingSelect() {
+    const select = document.getElementById('embeddingSelect');
+    const hint = document.getElementById('embeddingHint');
+    
+    if (!settings || !settings.embedding.available_models) {
+        select.innerHTML = '<option value="">Loading...</option>';
+        return;
+    }
+    
+    const models = settings.embedding.available_models;
+    
+    select.innerHTML = Object.entries(models).map(([key, info]) => {
+        const dim = info.dimension || '?';
+        const engine = info.engine || 'unknown';
+        return `<option value="${key}" ${key === selectedEmbedding ? 'selected' : ''}>
+            ${info.name} (${dim} dim) - ${engine}
+        </option>`;
+    }).join('');
+    
+    const currentInfo = models[selectedEmbedding];
+    if (currentInfo) {
+        hint.textContent = currentInfo.description || `${currentInfo.dimension} dimensions`;
+    }
+}
+
+function updateEmbeddingBadge() {
+    const badge = document.getElementById('currentEmbedding');
+    if (settings && settings.embedding.available_models[selectedEmbedding]) {
+        const info = settings.embedding.available_models[selectedEmbedding];
+        badge.textContent = `${selectedEmbedding} (${info.dimension} dim)`;
+    } else {
+        badge.textContent = selectedEmbedding || '-';
+    }
+}
+
+function onEmbeddingChange() {
+    selectedEmbedding = document.getElementById('embeddingSelect').value;
+    updateEmbeddingBadge();
+    
+    // Show warning if changed
+    const warning = document.getElementById('embeddingWarning');
+    if (selectedEmbedding !== originalEmbedding) {
+        warning.style.display = 'block';
+    } else {
+        warning.style.display = 'none';
+    }
+    
+    // Update hint
+    if (settings && settings.embedding.available_models[selectedEmbedding]) {
+        const info = settings.embedding.available_models[selectedEmbedding];
+        document.getElementById('embeddingHint').textContent = info.description || '';
+    }
+}
+
+async function saveEmbedding() {
+    if (!selectedEmbedding) {
+        showToast('Please select an embedding model', 'warning');
+        return;
+    }
+    
+    const btn = document.getElementById('saveEmbeddingBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    
+    try {
+        const res = await fetch('/settings/embedding', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_key: selectedEmbedding })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+            originalEmbedding = selectedEmbedding;
+            document.getElementById('embeddingWarning').style.display = 'none';
+            
+            if (data.requires_reindex) {
+                showToast('Embedding saved! Re-indexing recommended.', 'warning');
+            } else {
+                showToast('Embedding settings saved!');
+            }
+            
+            loadSettings();
+            verifySettings();
+        } else {
+            showToast(data.detail || 'Failed to save embedding', 'error');
+        }
+        
+    } catch (e) {
+        console.error('Failed to save embedding:', e);
+        showToast('Failed to save embedding', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Embedding';
+    }
+}
+
+async function startReindex() {
+    if (!confirm('This will re-index all documents with the current embedding model. This may take a while. Continue?')) {
+        return;
+    }
+    
+    const btn = document.getElementById('reindexBtn');
+    const progress = document.getElementById('reindexProgress');
+    const progressFill = document.getElementById('progressFill');
+    const status = document.getElementById('reindexStatus');
+    
+    btn.disabled = true;
+    btn.textContent = 'Re-indexing...';
+    progress.style.display = 'block';
+    progressFill.style.width = '10%';
+    status.textContent = 'Starting re-index...';
+    
+    try {
+        const res = await fetch('/settings/embedding/reindex', {
+            method: 'POST'
+        });
+        
+        const data = await res.json();
+        
+        progressFill.style.width = '100%';
+        
+        if (data.success) {
+            status.textContent = `Completed: ${data.success_chunks}/${data.total_chunks} chunks indexed`;
+            showToast(`Re-indexing complete! ${data.success_chunks} chunks indexed.`);
+        } else {
+            status.textContent = `Failed: ${data.error || 'Unknown error'}`;
+            showToast('Re-indexing failed', 'error');
+        }
+        
+    } catch (e) {
+        console.error('Re-index failed:', e);
+        status.textContent = 'Error: ' + e.message;
+        showToast('Re-indexing failed', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Re-index Documents';
+        
+        setTimeout(() => {
+            progress.style.display = 'none';
+            progressFill.style.width = '0%';
+        }, 5000);
+    }
 }
 
 async function saveSettings() {
@@ -412,6 +711,65 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
+// Verify settings application across system
+async function verifySettings() {
+    const statusDiv = document.getElementById('applicationStatus');
+    statusDiv.innerHTML = '<div class="status-loading">Verifying settings across system...</div>';
+    
+    try {
+        const res = await fetch('/settings/verify');
+        const data = await res.json();
+        
+        const items = [
+            {
+                label: 'Runtime Settings (Memory)',
+                value: `${data.runtime.provider} / ${data.runtime.model}`,
+                active: true
+            },
+            {
+                label: 'Database Storage',
+                value: data.database.synced ? `${data.database.provider} / ${data.database.model}` : 'Not synced',
+                active: data.database.synced
+            },
+            {
+                label: 'RAG Chat API',
+                value: `${data.rag_api.provider} / ${data.rag_api.model}`,
+                active: data.rag_api.provider === data.runtime.provider && data.rag_api.model === data.runtime.model
+            },
+            {
+                label: 'Last Updated',
+                value: data.database.updated_at || 'N/A',
+                active: true
+            }
+        ];
+        
+        statusDiv.innerHTML = `
+            <div class="status-grid">
+                ${items.map(item => `
+                    <div class="status-item ${item.active ? 'active' : 'inactive'}">
+                        <div class="status-indicator ${item.active ? 'green' : 'gray'}"></div>
+                        <div>
+                            <div class="status-label">${item.label}</div>
+                            <div class="status-value">${item.value}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            ${data.all_synced ? 
+                '<p style="margin-top: 12px; color: var(--success); font-size: 13px;">All settings are properly synchronized.</p>' :
+                '<p style="margin-top: 12px; color: var(--warning); font-size: 13px;">Warning: Settings may not be fully synchronized.</p>'
+            }
+        `;
+        
+    } catch (e) {
+        console.error('Failed to verify settings:', e);
+        statusDiv.innerHTML = '<div style="color: var(--error);">Failed to verify settings. API may not be available.</div>';
+    }
+    
+    window.dispatchEvent(new Event("resize"));
+}
+
 // Load on init
 loadSettings();
+verifySettings();
 </script>

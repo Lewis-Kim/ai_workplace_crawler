@@ -14,6 +14,7 @@ from models.content import ContentTable
 from models.ImageTable import ImageTable
 from vector.realtime_vector import get_qdrant_client
 from vector.collection_manager import resolve_collection_name
+from qdrant_client.models import PointIdsList
 
 logger = logging.getLogger("documents")
 
@@ -172,9 +173,10 @@ def _delete_document_internal(doc_id: int, db: Session) -> DeleteResponse:
                 client = get_qdrant_client()
                 
                 # 포인트 ID로 삭제 (content_id가 point id)
+                # qdrant-client 1.16+ uses PointIdsList model
                 client.delete(
                     collection_name=collection_name,
-                    points_selector={"points": content_ids},
+                    points_selector=PointIdsList(points=content_ids),
                 )
                 deleted_vectors = len(content_ids)
                 logger.info(f"[DELETE] Qdrant vectors deleted: {deleted_vectors} from {collection_name}")

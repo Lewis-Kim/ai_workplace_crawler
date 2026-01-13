@@ -106,6 +106,26 @@
     100% { opacity: 1; }
 }
 
+/* 새 로그 하이라이트 애니메이션 */
+@keyframes newLogHighlight {
+    0% { background-color: rgba(59, 130, 246, 0.3); }
+    100% { background-color: transparent; }
+}
+
+.log-entry.new {
+    animation: newLogHighlight 1s ease-out;
+}
+
+.log-entry.warning {
+    color: #f59e0b;
+}
+
+.log-container {
+    max-height: 400px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
 .pipeline-stat {
     background: var(--bg-dark);
     padding: 12px 16px;
@@ -187,28 +207,104 @@ async function loadDashboard() {
   }
 }
 
-async function loadLogs() {
+// 초기 로그 로드 (최근 50줄)
+async function loadInitialLogs() {
   try {
     const res = await fetch("/api/logs?limit=50");
     const data = await res.json();
 
     const box = document.getElementById("logBox");
-    box.innerHTML = data.logs.map(line => {
-        let className = "log-entry";
-        if (line.includes("[ERROR]")) className += " error";
-        else if (line.includes("[INFO]")) className += " info";
-        else if (line.includes("[SUCCESS]")) className += " success";
-        
-        return `<div class="${className}">${line}</div>`;
-    }).join("");
+    box.innerHTML = data.logs.map(line => formatLogLine(line)).join("");
     
-    // Auto scroll to bottom
-    // box.scrollTop = box.scrollHeight; // Optional: depends on user preference
+    // 스크롤을 맨 아래로
+    box.scrollTop = box.scrollHeight;
   } catch(e) { console.error(e); }
 
   // iframe 높이 자동 재조정 트리거
   window.dispatchEvent(new Event("resize"));
 }
+
+// 로그 라인 포맷팅
+function formatLogLine(line) {
+    let className = "log-entry";
+    if (line.includes("[ERROR]")) className += " error";
+    else if (line.includes("[INFO]")) className += " info";
+    else if (line.includes("[SUCCESS]") || line.includes("[OK]")) className += " success";
+    else if (line.includes("[WARN]")) className += " warning";
+    
+    return `<div class="${className}">${escapeHtml(line)}</div>`;
+}
+
+// HTML 이스케이프
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// SSE 실시간 로그 스트리밍
+let logEventSource = null;
+const MAX_LOG_LINES = 200;  // 최대 로그 라인 수
+
+function startLogStream() {
+    if (logEventSource) {
+        logEventSource.close();
+    }
+    
+    logEventSource = new EventSource("/api/logs/stream");
+    const box = document.getElementById("logBox");
+    
+    logEventSource.onmessage = function(event) {
+        const line = event.data;
+        if (!line.trim()) return;
+        
+        // 새 로그 라인 추가
+        const newLine = document.createElement('div');
+        newLine.innerHTML = formatLogLine(line).replace('<div class="', '').replace('</div>', '');
+        newLine.className = formatLogLine(line).match(/class="([^"]+)"/)?.[1] || 'log-entry';
+        newLine.textContent = line;
+        
+        // 클래스 적용
+        if (line.includes("[ERROR]")) newLine.classList.add("error");
+        else if (line.includes("[INFO]")) newLine.classList.add("info");
+        else if (line.includes("[SUCCESS]") || line.includes("[OK]")) newLine.classList.add("success");
+        else if (line.includes("[WARN]")) newLine.classList.add("warning");
+        
+        newLine.classList.add("log-entry", "new");
+        box.appendChild(newLine);
+        
+        // 최대 라인 수 제한
+        while (box.children.length > MAX_LOG_LINES) {
+            box.removeChild(box.firstChild);
+        }
+        
+        // 자동 스크롤 (사용자가 위로 스크롤하지 않은 경우에만)
+        const isScrolledToBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 50;
+        if (isScrolledToBottom) {
+            box.scrollTop = box.scrollHeight;
+        }
+        
+        // 새 로그 애니메이션 제거
+        setTimeout(() => newLine.classList.remove("new"), 1000);
+    };
+    
+    logEventSource.onerror = function(e) {
+        console.error("Log stream error:", e);
+        // 재연결 시도
+        setTimeout(() => {
+            if (logEventSource.readyState === EventSource.CLOSED) {
+                startLogStream();
+            }
+        }, 3000);
+    };
+}
+
+// 페이지 종료 시 SSE 연결 닫기
+window.addEventListener('beforeunload', function() {
+    if (logEventSource) {
+        logEventSource.close();
+    }
+});
 
 // Pipeline functions
 async function loadPipelineStatus() {
@@ -323,8 +419,13 @@ function showToast(message, type = 'success') {
 }
 
 loadDashboard();
-loadLogs();
+loadInitialLogs();
 loadPipelineStatus();
-setInterval(loadLogs, 3000);
+
+// SSE 실시간 로그 스트리밍 시작
+startLogStream();
+
+// 대시보드와 파이프라인 상태만 주기적으로 갱신
+setInterval(loadDashboard, 10000);
 setInterval(loadPipelineStatus, 5000);
 </script>

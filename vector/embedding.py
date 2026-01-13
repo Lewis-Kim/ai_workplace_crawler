@@ -1,7 +1,12 @@
 # vector/embedding.py
 
+import os
 import json
 import http.client
+from dotenv import load_dotenv
+
+load_dotenv()  # 환경변수 로드
+
 import google.generativeai as genai
 from openai import OpenAI
 
@@ -13,12 +18,21 @@ from vector.embedding_models import (
 )
 
 # -----------------------------
-# OpenAI
+# OpenAI (Lazy initialization)
 # -----------------------------
-_openai_client = OpenAI()
+_openai_client: OpenAI | None = None
+
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI()
+    return _openai_client
+
 
 def _embed_openai(text: str, model: str) -> list[float]:
-    resp = _openai_client.embeddings.create(
+    client = _get_openai_client()
+    resp = client.embeddings.create(
         model=model,
         input=text
     )
@@ -28,8 +42,9 @@ def _embed_openai(text: str, model: str) -> list[float]:
 # -----------------------------
 # Ollama
 # -----------------------------
-OLLAMA_HOST = "localhost"
-OLLAMA_PORT = 11434
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "localhost")
+OLLAMA_PORT = int(os.getenv("OLLAMA_PORT", "11434"))
+
 
 def _embed_ollama(text: str, model: str) -> list[float]:
     conn = http.client.HTTPConnection(OLLAMA_HOST, OLLAMA_PORT, timeout=60)
@@ -47,11 +62,20 @@ def _embed_ollama(text: str, model: str) -> list[float]:
 
 
 # -----------------------------
-# Gemini
+# Gemini (Lazy initialization)
 # -----------------------------
-genai.configure()  # GOOGLE_API_KEY 환경변수 사용
+_gemini_configured = False
+
+
+def _ensure_gemini_configured():
+    global _gemini_configured
+    if not _gemini_configured:
+        genai.configure()  # GOOGLE_API_KEY 환경변수 사용
+        _gemini_configured = True
+
 
 def _embed_gemini(text: str, model: str) -> list[float]:
+    _ensure_gemini_configured()
     result = genai.embed_content(
         model=model,
         content=text,

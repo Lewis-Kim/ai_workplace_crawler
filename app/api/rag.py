@@ -10,7 +10,6 @@ from vector.embedding import embed_text
 from vector.realtime_vector import get_qdrant_client
 from vector.collection_manager import resolve_collection_name
 from config.runtime_settings import runtime_settings
-from qdrant_client.http.models import SearchRequest
 
 logger = logging.getLogger("rag")
 
@@ -131,17 +130,16 @@ async def rag_chat(req: RAGRequest):
     
     collection_name = resolve_collection_name(base_collection, model_key)    
     client = get_qdrant_client()
-     
     
     try:
-        search_result = client.search(
+        # qdrant-client 1.16+ uses query_points instead of search
+        search_response = client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=req.top_k,
             with_payload=True,
         )
-
-       
+        search_result = search_response.points
     except Exception as e:
         logger.error(f"[RAG] search failed: {e}")
         raise HTTPException(status_code=500, detail=f"검색 실패: {str(e)}")

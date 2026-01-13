@@ -51,10 +51,38 @@ class EmbeddingSettings:
     """임베딩 관련 설정"""
     model_key: str = "openai_large"
     
+    # 사용 가능한 임베딩 모델 (model_key -> 설명)
     available_models: dict = field(default_factory=lambda: {
-        "openai_large": "OpenAI text-embedding-3-large (3072 dim)",
-        "openai_small": "OpenAI text-embedding-3-small (1536 dim)",
-        "ollama_nomic": "Ollama nomic-embed-text (768 dim)",
+        "openai_large": {
+            "name": "OpenAI text-embedding-3-large",
+            "dimension": 3072,
+            "engine": "openai",
+            "description": "OpenAI 최고 성능 모델 (API 키 필요)"
+        },
+        "nomic": {
+            "name": "Ollama nomic-embed-text",
+            "dimension": 768,
+            "engine": "ollama",
+            "description": "Ollama 로컬 모델 (무료)"
+        },
+        "bge_m3": {
+            "name": "Ollama bge-m3",
+            "dimension": 1024,
+            "engine": "ollama",
+            "description": "다국어 지원 로컬 모델"
+        },
+        "gemini_embed": {
+            "name": "Google embedding-001",
+            "dimension": 768,
+            "engine": "gemini",
+            "description": "Google Gemini 임베딩 (API 키 필요)"
+        },
+        "gemma2_embed": {
+            "name": "Ollama gemma2 embedding",
+            "dimension": 768,
+            "engine": "ollama",
+            "description": "Gemma2 기반 로컬 모델"
+        },
     })
 
 
@@ -78,6 +106,7 @@ class RuntimeSettings:
     # 설정 키 상수
     KEY_LLM_PROVIDER = "llm_provider"
     KEY_LLM_MODEL = "llm_model"
+    KEY_EMBEDDING_MODEL = "embedding_model_key"
     
     def __new__(cls):
         if cls._instance is None:
@@ -136,7 +165,14 @@ class RuntimeSettings:
             if model_row:
                 self.llm.model = model_row.setting_value
             
-            logger.info(f"[SETTINGS] Loaded from DB: {self.llm.provider}/{self.llm.model}")
+            # Embedding Model
+            embed_row = session.query(SystemSettings).filter(
+                SystemSettings.setting_key == self.KEY_EMBEDDING_MODEL
+            ).first()
+            if embed_row:
+                self.embedding.model_key = embed_row.setting_value
+            
+            logger.info(f"[SETTINGS] Loaded from DB: LLM={self.llm.provider}/{self.llm.model}, Embedding={self.embedding.model_key}")
             
         except Exception as e:
             logger.warning(f"[SETTINGS] DB load failed (using defaults): {e}")
@@ -204,6 +240,52 @@ class RuntimeSettings:
         
         return True
     
+    def set_embedding(self, model_key: str) -> dict:
+        """
+        Embedding 모델 변경 (메모리 + DB 저장)
+        
+        ⚠️ 주의: 모델 변경 시 재인덱싱 필요
+        
+        Args:
+            model_key: 임베딩 모델 키 (openai_large, nomic 등)
+            
+        Returns:
+            변경 결과 및 경고 메시지
+        """
+        if model_key not in self.embedding.available_models:
+            return {
+                "success": False,
+                "error": f"Unknown model_key: {model_key}",
+            }
+        
+        old_model = self.embedding.model_key
+        
+        # 메모리 업데이트
+        self.embedding.model_key = model_key
+        
+        # DB 저장
+        self._save_to_db(
+            self.KEY_EMBEDDING_MODEL, 
+            model_key, 
+            "임베딩 모델 키"
+        )
+        
+        # 환경변수도 업데이트 (현재 프로세스 내에서만)
+        os.environ["MODEL_KEY"] = model_key
+        
+        new_config = self.embedding.available_models[model_key]
+        old_config = self.embedding.available_models.get(old_model, {})
+        
+        return {
+            "success": True,
+            "old_model": old_model,
+            "new_model": model_key,
+            "old_dimension": old_config.get("dimension"),
+            "new_dimension": new_config.get("dimension"),
+            "requires_reindex": old_model != model_key,
+            "warning": "모델이 변경되었습니다. 기존 문서를 검색하려면 재인덱싱이 필요합니다." if old_model != model_key else None,
+        }
+    
     def get_llm_config(self) -> dict:
         """현재 LLM 설정 반환"""
         return {
@@ -215,8 +297,10 @@ class RuntimeSettings:
     
     def get_embedding_config(self) -> dict:
         """현재 임베딩 설정 반환"""
+        current_model = self.embedding.available_models.get(self.embedding.model_key, {})
         return {
             "model_key": self.embedding.model_key,
+            "model_info": current_model,
             "available_models": self.embedding.available_models,
         }
     
@@ -232,16 +316,18 @@ class RuntimeSettings:
         """환경변수 값으로 초기화 (DB도 업데이트)"""
         env_provider = os.getenv("LLM_PROVIDER", "openai")
         env_model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+        env_embedding = os.getenv("MODEL_KEY", "openai_large")
         
         self.llm.provider = env_provider
         self.llm.model = env_model
-        self.embedding.model_key = os.getenv("MODEL_KEY", "openai_large")
+        self.embedding.model_key = env_embedding
         
         # DB도 업데이트
         self._save_to_db(self.KEY_LLM_PROVIDER, env_provider, "LLM 제공자")
         self._save_to_db(self.KEY_LLM_MODEL, env_model, "LLM 모델명")
+        self._save_to_db(self.KEY_EMBEDDING_MODEL, env_embedding, "임베딩 모델 키")
         
-        logger.info("[SETTINGS] Reset to environment defaults")
+        logger.info(f"[SETTINGS] Reset to environment defaults: LLM={env_provider}/{env_model}, Embedding={env_embedding}")
     
     def reload_from_db(self):
         """DB에서 설정 다시 로드"""
