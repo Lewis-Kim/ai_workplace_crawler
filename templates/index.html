@@ -67,7 +67,7 @@
         </ul>
     </aside>
     <main class="content">
-        <iframe id="contentFrame" src="/dashboard" frameborder="0" scrolling="no"></iframe>
+        <iframe id="contentFrame" src="/dashboard" frameborder="0"></iframe>
     </main>
 </div>
 <script src="/static/js/main.js"></script>
@@ -75,8 +75,18 @@
 window.addEventListener("message", (event) => {
     if (event.data?.type === "resize-iframe") {
         const iframe = document.getElementById("contentFrame");
-        // Add a bit of buffer to prevent scrollbars flickering
-        iframe.style.height = (event.data.height + 20) + "px";
+        const contentHeight = event.data.height;
+        const viewportHeight = window.innerHeight;
+        
+        // If content is larger than viewport, limit iframe height and enable scrolling
+        if (contentHeight > viewportHeight) {
+            iframe.style.height = "100%";
+            iframe.style.overflowY = "auto";
+        } else {
+            // Content fits, use content height with buffer
+            iframe.style.height = (contentHeight + 20) + "px";
+            iframe.style.overflowY = "hidden";
+        }
     }
 });
 

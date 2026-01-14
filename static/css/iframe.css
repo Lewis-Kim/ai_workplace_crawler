@@ -183,20 +183,40 @@ input:focus, textarea:focus {
 .log-entry.info { color: #93c5fd; }
 .log-entry.success { color: #86efac; }
 
-/* Scrollbar */
+/* Modal-style Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.1);
-}
-::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: rgba(15, 23, 42, 0.6);
   border-radius: 4px;
 }
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3b82f6, #2563eb);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: linear-gradient(180deg, #60a5fa, #3b82f6);
+  background-clip: padding-box;
+}
+
+/* Firefox scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #3b82f6 rgba(15, 23, 42, 0.6);
+}
+
+/* Ensure body can scroll when content overflows */
+body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 100vh;
 }
 
 /* Upload Page */

@@ -81,6 +81,48 @@
         </div>
     </div>
 
+    <!-- Qdrant Collection Settings -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Qdrant Collection Settings</h2>
+            <div id="currentCollection" class="current-badge">-</div>
+        </div>
+        
+        <div class="setting-group">
+            <label class="setting-label">Collection</label>
+            <select id="collectionSelect" class="model-select" onchange="onCollectionChange()">
+                <option value="">Loading...</option>
+            </select>
+            <div id="collectionHint" class="setting-hint">Select a Qdrant collection for RAG search</div>
+        </div>
+        
+        <div class="collection-info" id="collectionInfo" style="display: none; margin-top: 12px;">
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Vectors</span>
+                    <span class="info-value" id="collectionVectors">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Points</span>
+                    <span class="info-value" id="collectionPoints">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Dimension</span>
+                    <span class="info-value" id="collectionDimension">-</span>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+            <button class="btn btn-primary" onclick="saveCollection()" id="saveCollectionBtn">
+                Save Collection
+            </button>
+            <button class="btn btn-secondary" onclick="loadCollections()">
+                Refresh List
+            </button>
+        </div>
+    </div>
+
     <!-- Settings Application Status -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -387,6 +429,41 @@
     padding: 2px 8px;
     border-radius: 4px;
 }
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.info-item {
+    background: var(--bg-dark);
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.info-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.info-value {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.collection-info {
+    background: rgba(59, 130, 246, 0.05);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+}
 </style>
 
 <script>
@@ -395,6 +472,9 @@ let selectedProvider = null;
 let selectedModel = null;
 let selectedEmbedding = null;
 let originalEmbedding = null;
+let collectionsData = null;
+let selectedCollection = null;
+let originalCollection = null;
 
 async function loadSettings() {
     try {
@@ -774,7 +854,124 @@ async function verifySettings() {
     window.dispatchEvent(new Event("resize"));
 }
 
+// ===================
+// Collection Functions
+// ===================
+
+async function loadCollections() {
+    try {
+        const res = await fetch('/settings/collections');
+        collectionsData = await res.json();
+        
+        selectedCollection = collectionsData.current;
+        originalCollection = collectionsData.current;
+        
+        updateCollectionSelect();
+        updateCollectionBadge();
+        
+    } catch (e) {
+        console.error('Failed to load collections:', e);
+        showToast('Failed to load collections', 'error');
+    }
+}
+
+function updateCollectionSelect() {
+    const select = document.getElementById('collectionSelect');
+    const hint = document.getElementById('collectionHint');
+    
+    if (!collectionsData || !collectionsData.collections) {
+        select.innerHTML = '<option value="">Loading...</option>';
+        return;
+    }
+    
+    const collections = collectionsData.collections;
+    
+    if (collections.length === 0) {
+        select.innerHTML = '<option value="">No collections found</option>';
+        hint.textContent = 'Create a collection first by indexing documents';
+        return;
+    }
+    
+    select.innerHTML = collections.map(col => {
+        const vectors = col.vectors_count || 0;
+        const dim = col.vector_size || '?';
+        return `<option value="${col.name}" ${col.name === selectedCollection ? 'selected' : ''}>
+            ${col.name} (${vectors} vectors, ${dim} dim)
+        </option>`;
+    }).join('');
+    
+    hint.textContent = `${collections.length} collection(s) available`;
+    
+    // Show collection info for selected
+    onCollectionChange();
+}
+
+function updateCollectionBadge() {
+    const badge = document.getElementById('currentCollection');
+    if (selectedCollection) {
+        badge.textContent = selectedCollection;
+    } else {
+        badge.textContent = 'Auto (not set)';
+    }
+}
+
+function onCollectionChange() {
+    selectedCollection = document.getElementById('collectionSelect').value;
+    updateCollectionBadge();
+    
+    // Update collection info
+    const infoDiv = document.getElementById('collectionInfo');
+    if (selectedCollection && collectionsData) {
+        const col = collectionsData.collections.find(c => c.name === selectedCollection);
+        if (col) {
+            document.getElementById('collectionVectors').textContent = col.vectors_count?.toLocaleString() || '-';
+            document.getElementById('collectionPoints').textContent = col.points_count?.toLocaleString() || '-';
+            document.getElementById('collectionDimension').textContent = col.vector_size || '-';
+            infoDiv.style.display = 'block';
+        }
+    } else {
+        infoDiv.style.display = 'none';
+    }
+}
+
+async function saveCollection() {
+    if (!selectedCollection) {
+        showToast('Please select a collection', 'warning');
+        return;
+    }
+    
+    const btn = document.getElementById('saveCollectionBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    
+    try {
+        const res = await fetch('/settings/collections', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collection_name: selectedCollection })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+            originalCollection = selectedCollection;
+            showToast('Collection settings saved!');
+            verifySettings();
+        } else {
+            showToast(data.detail || 'Failed to save collection', 'error');
+        }
+        
+    } catch (e) {
+        console.error('Failed to save collection:', e);
+        showToast('Failed to save collection', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Collection';
+    }
+}
+
 // Load on init
 loadSettings();
+loadCollections();
 verifySettings();
 </script>

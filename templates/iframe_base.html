@@ -13,9 +13,16 @@
 
 <script>
 function resizeParent() {
-    const height = document.documentElement.scrollHeight;
+    const contentHeight = document.documentElement.scrollHeight;
+    // Get parent viewport height (approximate)
+    const maxHeight = window.parent.innerHeight || window.innerHeight;
+    
+    // If content is larger than viewport, use viewport height (allow scroll inside iframe)
+    // Otherwise, fit to content
+    const height = Math.min(contentHeight, maxHeight - 20);
+    
     window.parent.postMessage(
-        { type: "resize-iframe", height },
+        { type: "resize-iframe", height: contentHeight, maxHeight: maxHeight },
         "*"
     );
 }

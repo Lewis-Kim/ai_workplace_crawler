@@ -128,7 +128,15 @@ async def rag_chat(req: RAGRequest):
         logger.error(f"[RAG] embedding failed: {e}")
         raise HTTPException(status_code=500, detail=f"임베딩 실패: {str(e)}")
     
-    collection_name = resolve_collection_name(base_collection, model_key)    
+    # Collection 결정: 수동 선택 > 자동 생성
+    manual_collection = runtime_settings.collection.collection_name
+    if manual_collection:
+        collection_name = manual_collection
+        logger.debug(f"[RAG] Using manually selected collection: {collection_name}")
+    else:
+        collection_name = resolve_collection_name(base_collection, model_key)
+        logger.debug(f"[RAG] Using auto-generated collection: {collection_name}")
+    
     client = get_qdrant_client()
     
     try:
@@ -222,10 +230,25 @@ async def get_rag_config():
     """
     현재 RAG 설정 조회
     """
+    # Collection 결정
+    manual_collection = runtime_settings.collection.collection_name
+    if manual_collection:
+        collection_name = manual_collection
+        collection_mode = "manual"
+    else:
+        model_key = os.getenv("MODEL_KEY", "openai_large")
+        base_collection = os.getenv("BASE_COLLECTION", "documents")
+        collection_name = resolve_collection_name(base_collection, model_key)
+        collection_mode = "auto"
+    
     return {
         "embedding_model": runtime_settings.embedding.model_key,
         "llm_provider": runtime_settings.llm.provider,
         "llm_model": runtime_settings.llm.model,
         "available_providers": list(runtime_settings.llm.available_models.keys()),
+        "collection": {
+            "name": collection_name,
+            "mode": collection_mode,
+        },
     }
 

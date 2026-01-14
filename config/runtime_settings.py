@@ -86,6 +86,12 @@ class EmbeddingSettings:
     })
 
 
+@dataclass
+class CollectionSettings:
+    """Qdrant Collection 설정"""
+    collection_name: Optional[str] = None  # None이면 자동 생성 (기존 방식)
+
+
 class RuntimeSettings:
     """
     런타임 설정 싱글톤 (DB 영구 저장)
@@ -107,6 +113,7 @@ class RuntimeSettings:
     KEY_LLM_PROVIDER = "llm_provider"
     KEY_LLM_MODEL = "llm_model"
     KEY_EMBEDDING_MODEL = "embedding_model_key"
+    KEY_COLLECTION_NAME = "qdrant_collection_name"
     
     def __new__(cls):
         if cls._instance is None:
@@ -126,6 +133,10 @@ class RuntimeSettings:
         
         self.embedding = EmbeddingSettings(
             model_key=os.getenv("MODEL_KEY", "openai_large"),
+        )
+        
+        self.collection = CollectionSettings(
+            collection_name=None,  # 기본값: 자동 생성 모드
         )
         
         self._initialized = True
@@ -172,7 +183,14 @@ class RuntimeSettings:
             if embed_row:
                 self.embedding.model_key = embed_row.setting_value
             
-            logger.info(f"[SETTINGS] Loaded from DB: LLM={self.llm.provider}/{self.llm.model}, Embedding={self.embedding.model_key}")
+            # Collection Name
+            collection_row = session.query(SystemSettings).filter(
+                SystemSettings.setting_key == self.KEY_COLLECTION_NAME
+            ).first()
+            if collection_row:
+                self.collection.collection_name = collection_row.setting_value
+            
+            logger.info(f"[SETTINGS] Loaded from DB: LLM={self.llm.provider}/{self.llm.model}, Embedding={self.embedding.model_key}, Collection={self.collection.collection_name}")
             
         except Exception as e:
             logger.warning(f"[SETTINGS] DB load failed (using defaults): {e}")
@@ -212,6 +230,30 @@ class RuntimeSettings:
         except Exception as e:
             session.rollback()
             logger.error(f"[SETTINGS] DB save failed: {e}")
+            return False
+        finally:
+            session.close()
+    
+    def _delete_from_db(self, key: str) -> bool:
+        """DB에서 설정 삭제"""
+        session = self._get_db_session()
+        if not session:
+            return False
+            
+        try:
+            from models.settings import SystemSettings
+            
+            session.query(SystemSettings).filter(
+                SystemSettings.setting_key == key
+            ).delete()
+            
+            session.commit()
+            logger.info(f"[SETTINGS] Deleted from DB: {key}")
+            return True
+            
+        except Exception as e:
+            session.rollback()
+            logger.error(f"[SETTINGS] DB delete failed: {e}")
             return False
         finally:
             session.close()
@@ -304,11 +346,49 @@ class RuntimeSettings:
             "available_models": self.embedding.available_models,
         }
     
+    def set_collection(self, collection_name: str) -> dict:
+        """
+        Qdrant Collection 설정 변경 (메모리 + DB 저장)
+        
+        Args:
+            collection_name: Qdrant collection 이름
+            
+        Returns:
+            변경 결과
+        """
+        old_collection = self.collection.collection_name
+        
+        # 메모리 업데이트
+        self.collection.collection_name = collection_name
+        
+        # DB 저장
+        self._save_to_db(
+            self.KEY_COLLECTION_NAME,
+            collection_name,
+            "Qdrant Collection 이름"
+        )
+        
+        logger.info(f"[SETTINGS] Collection changed: {old_collection} -> {collection_name}")
+        
+        return {
+            "success": True,
+            "old_collection": old_collection,
+            "new_collection": collection_name,
+        }
+    
+    def get_collection_config(self) -> dict:
+        """현재 Collection 설정 반환"""
+        return {
+            "collection_name": self.collection.collection_name,
+            "mode": "manual" if self.collection.collection_name else "auto",
+        }
+    
     def to_dict(self) -> dict:
         """전체 설정을 dict로 반환"""
         return {
             "llm": self.get_llm_config(),
             "embedding": self.get_embedding_config(),
+            "collection": self.get_collection_config(),
             "storage": "database",  # 저장 방식 표시
         }
     
@@ -321,11 +401,15 @@ class RuntimeSettings:
         self.llm.provider = env_provider
         self.llm.model = env_model
         self.embedding.model_key = env_embedding
+        self.collection.collection_name = None  # 자동 모드로 리셋
         
         # DB도 업데이트
         self._save_to_db(self.KEY_LLM_PROVIDER, env_provider, "LLM 제공자")
         self._save_to_db(self.KEY_LLM_MODEL, env_model, "LLM 모델명")
         self._save_to_db(self.KEY_EMBEDDING_MODEL, env_embedding, "임베딩 모델 키")
+        
+        # Collection 설정 삭제 (자동 모드)
+        self._delete_from_db(self.KEY_COLLECTION_NAME)
         
         logger.info(f"[SETTINGS] Reset to environment defaults: LLM={env_provider}/{env_model}, Embedding={env_embedding}")
     

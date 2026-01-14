@@ -3,9 +3,10 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 from config.runtime_settings import runtime_settings
+from vector.realtime_vector import get_qdrant_client
 
 logger = logging.getLogger("settings")
 
@@ -23,6 +24,10 @@ class LLMSettingsUpdate(BaseModel):
 
 class EmbeddingSettingsUpdate(BaseModel):
     model_key: str = Field(..., description="임베딩 모델 키 (openai_large, nomic, bge_m3 등)")
+
+
+class CollectionSettingsUpdate(BaseModel):
+    collection_name: str = Field(..., description="Qdrant collection 이름")
 
 
 class SettingsResponse(BaseModel):
@@ -195,6 +200,91 @@ async def reset_settings():
         "message": "설정이 환경변수 기본값으로 초기화되었습니다.",
         "current": runtime_settings.to_dict(),
     }
+
+
+# =================================================
+# Qdrant Collection 관리
+# =================================================
+
+@router.get("/collections")
+async def get_collections():
+    """
+    Qdrant에 존재하는 모든 collection 목록 조회
+    """
+    try:
+        client = get_qdrant_client()
+        collections = client.get_collections()
+        
+        collection_list = []
+        for col in collections.collections:
+            try:
+                info = client.get_collection(col.name)
+                collection_list.append({
+                    "name": col.name,
+                    "vectors_count": info.vectors_count,
+                    "points_count": info.points_count,
+                    "vector_size": info.config.params.vectors.size if info.config.params.vectors else None,
+                })
+            except Exception:
+                collection_list.append({
+                    "name": col.name,
+                    "vectors_count": None,
+                    "points_count": None,
+                    "vector_size": None,
+                })
+        
+        # 현재 선택된 collection
+        current_collection = runtime_settings.get_collection_config()
+        
+        return {
+            "collections": collection_list,
+            "current": current_collection.get("collection_name"),
+            "total": len(collection_list),
+        }
+        
+    except Exception as e:
+        logger.error(f"[SETTINGS] Failed to get collections: {e}")
+        raise HTTPException(status_code=500, detail=f"Collection 목록 조회 실패: {str(e)}")
+
+
+@router.put("/collections")
+async def update_collection(req: CollectionSettingsUpdate):
+    """
+    사용할 Qdrant collection 변경
+    
+    - collection_name: Qdrant에 존재하는 collection 이름
+    """
+    try:
+        client = get_qdrant_client()
+        
+        # collection 존재 확인
+        if not client.collection_exists(req.collection_name):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Collection이 존재하지 않습니다: {req.collection_name}"
+            )
+        
+        # 설정 저장
+        result = runtime_settings.set_collection(req.collection_name)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result.get("error", "설정 변경 실패"))
+        
+        logger.info(f"[SETTINGS] Collection changed: {result['old_collection']} -> {result['new_collection']}")
+        
+        return {
+            "success": True,
+            "message": f"Collection 변경 완료: {req.collection_name}",
+            "old_collection": result["old_collection"],
+            "new_collection": result["new_collection"],
+            "current": runtime_settings.get_collection_config(),
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[SETTINGS] Failed to update collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Collection 변경 실패: {str(e)}")
 
 
 # =================================================

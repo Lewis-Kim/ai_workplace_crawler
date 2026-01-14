@@ -80,3 +80,34 @@ Based on `PRD.md`, the following tasks are planned.
     - [x] system_settings 테이블 ORM 모델 (models/settings.py)
     - [x] 서버 시작 시 DB에서 설정 로드
     - [x] 설정 변경 시 DB에 자동 저장
+
+## Phase 10: Qdrant Collection 선택 기능
+- [x] Qdrant Collection 관리 API 구현
+    - [x] GET /settings/collections - Qdrant에 존재하는 모든 collection 목록 조회
+    - [x] PUT /settings/collections - 사용할 collection 선택/변경
+- [x] RuntimeSettings에 Collection 설정 추가
+    - [x] CollectionSettings 데이터클래스 추가
+    - [x] set_collection() - collection 설정 변경 (DB 저장)
+    - [x] get_collection_config() - 현재 collection 설정 조회
+    - [x] DB 키: qdrant_collection_name
+- [x] 설정 UI에 Collection 선택 섹션 추가
+    - [x] Qdrant Collection Settings 카드 추가
+    - [x] 드롭다운에서 collection 선택
+    - [x] 선택한 collection의 vectors/points/dimension 정보 표시
+    - [x] Save/Refresh 버튼
+- [x] RAG API에서 선택된 Collection 사용
+    - [x] 수동 선택된 collection 우선 사용
+    - [x] 미선택 시 기존 자동 생성 방식 유지 (base_collection_model_key_version)
+
+## Phase 11: UI/UX 개선
+- [x] iframe 스크롤바 개선
+    - [x] 콘텐츠가 화면보다 클 때 스크롤바 표시
+    - [x] 모달 스타일 커스텀 스크롤바 적용
+        - [x] 파란색 그라데이션 (#3b82f6 → #2563eb)
+        - [x] Hover 시 밝은 파란색 (#60a5fa → #3b82f6)
+        - [x] 반투명 어두운 트랙 배경
+        - [x] Firefox 지원 (scrollbar-width, scrollbar-color)
+    - [x] index.html - scrolling="no" 제거, 동적 스크롤 활성화 로직
+    - [x] iframe_base.html - 리사이즈 메시지 개선
+    - [x] main.css - 모달 스타일 스크롤바 CSS 추가
+    - [x] iframe.css - iframe 내부 스크롤바 스타일 통일
