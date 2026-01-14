@@ -641,6 +641,8 @@ async function saveSettings() {
     btn.textContent = 'Saving...';
     
     try {
+        console.log('Saving LLM settings:', { provider: selectedProvider, model: selectedModel });
+        
         const res = await fetch('/settings/llm', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -650,18 +652,21 @@ async function saveSettings() {
             })
         });
         
+        console.log('Response status:', res.status);
         const data = await res.json();
+        console.log('Response data:', data);
         
         if (res.ok) {
             showToast('Settings saved successfully!');
             loadSettings(); // Reload to confirm
+            verifySettings(); // Verify sync status
         } else {
             showToast(data.detail || 'Failed to save settings', 'error');
         }
         
     } catch (e) {
         console.error('Failed to save settings:', e);
-        showToast('Failed to save settings', 'error');
+        showToast('Failed to save settings: ' + e.message, 'error');
     } finally {
         btn.disabled = false;
         btn.textContent = 'Save Settings';

@@ -54,7 +54,7 @@ def ensure_collection(
     cfg = get_embedding_config(model_key)
     collection_name = resolve_collection_name(base_collection, model_key)
 
-    # -------------------------------------------------
+# -------------------------------------------------
     # 컬렉션이 이미 존재하는 경우
     # -------------------------------------------------
     if client.collection_exists(collection_name):

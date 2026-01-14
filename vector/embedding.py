@@ -42,7 +42,9 @@ def _embed_openai(text: str, model: str) -> list[float]:
 # -----------------------------
 # Ollama
 # -----------------------------
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "localhost")
+_ollama_host_env = os.getenv("OLLAMA_HOST", "localhost")
+# 0.0.0.0은 서버 바인딩용이므로 클라이언트 연결 시 localhost로 변환
+OLLAMA_HOST = "localhost" if _ollama_host_env == "0.0.0.0" else _ollama_host_env
 OLLAMA_PORT = int(os.getenv("OLLAMA_PORT", "11434"))
 
 
