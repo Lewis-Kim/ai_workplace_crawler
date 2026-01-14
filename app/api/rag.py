@@ -132,14 +132,13 @@ async def rag_chat(req: RAGRequest):
     client = get_qdrant_client()
     
     try:
-        # qdrant-client 1.16+ uses query_points instead of search
-        search_response = client.query_points(
+        # qdrant-client 1.7.x uses search method
+        search_result = client.search(
             collection_name=collection_name,
-            query=query_vector,
+            query_vector=query_vector,
             limit=req.top_k,
             with_payload=True,
         )
-        search_result = search_response.points
     except Exception as e:
         logger.error(f"[RAG] search failed: {e}")
         raise HTTPException(status_code=500, detail=f"검색 실패: {str(e)}")
