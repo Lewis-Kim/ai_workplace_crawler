@@ -28,6 +28,8 @@ async def upload_folder_raw(
     for file in files:
         # ⭐ 핵심: filename에 상대경로가 포함되어 들어옴
         # 예: reports/2026/q1/a.pdf
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Missing filename")
         rel_path = Path(file.filename)
 
         # 보안: 경로 탈출 방지

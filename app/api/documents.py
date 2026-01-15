@@ -3,7 +3,8 @@
 import os
 import shutil
 import logging
-from typing import Optional
+from typing import Optional, cast
+
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 # Dependency
 # =================================================
 
+
 def get_db():
     db = SessionLocal()
     try:
@@ -36,6 +38,7 @@ def get_db():
 # =================================================
 # Response Models
 # =================================================
+
 
 class DocumentInfo(BaseModel):
     seq_id: int
@@ -69,6 +72,7 @@ class BatchDeleteResponse(BaseModel):
 # GET - 문서 목록 / 상세
 # =================================================
 
+
 @router.get("", response_model=list[DocumentInfo])
 async def list_documents(
     folder_name: Optional[str] = None,
@@ -81,30 +85,43 @@ async def list_documents(
     문서 목록 조회
     """
     query = db.query(MetaTable)
-    
+
     if folder_name:
         query = query.filter(MetaTable.folder_name == folder_name)
     if file_type:
         query = query.filter(MetaTable.file_type == file_type)
-    
+
     docs = query.order_by(MetaTable.seq_id.desc()).offset(offset).limit(limit).all()
-    
+
     results = []
     for doc in docs:
-        chunk_count = db.query(ContentTable).filter(ContentTable.doc_id == doc.seq_id).count()
-        image_count = db.query(ImageTable).filter(ImageTable.doc_id == doc.seq_id).count()
-        
-        results.append(DocumentInfo(
-            seq_id=doc.seq_id,
-            title=doc.title,
-            file_type=doc.file_type,
-            source=doc.source,
-            folder_name=doc.folder_name,
-            file_hash=doc.file_hash,
-            chunk_count=chunk_count,
-            image_count=image_count,
-        ))
-    
+        chunk_count = (
+            db.query(ContentTable).filter(ContentTable.doc_id == doc.seq_id).count()
+        )
+        image_count = (
+            db.query(ImageTable).filter(ImageTable.doc_id == doc.seq_id).count()
+        )
+
+        seq_id = cast(int, doc.seq_id)
+        title = cast(Optional[str], doc.title)
+        file_type_value = cast(Optional[str], doc.file_type)
+        source = cast(Optional[str], doc.source)
+        folder_name_value = cast(Optional[str], doc.folder_name)
+        file_hash = cast(Optional[str], doc.file_hash)
+
+        results.append(
+            DocumentInfo(
+                seq_id=seq_id,
+                title=title,
+                file_type=file_type_value,
+                source=source,
+                folder_name=folder_name_value,
+                file_hash=file_hash,
+                chunk_count=chunk_count,
+                image_count=image_count,
+            )
+        )
+
     return results
 
 
@@ -114,20 +131,29 @@ async def get_document(doc_id: int, db: Session = Depends(get_db)):
     단일 문서 상세 조회
     """
     doc = db.query(MetaTable).filter(MetaTable.seq_id == doc_id).first()
-    
+
     if not doc:
-        raise HTTPException(status_code=404, detail=f"문서를 찾을 수 없습니다: {doc_id}")
-    
+        raise HTTPException(
+            status_code=404, detail=f"문서를 찾을 수 없습니다: {doc_id}"
+        )
+
     chunk_count = db.query(ContentTable).filter(ContentTable.doc_id == doc_id).count()
     image_count = db.query(ImageTable).filter(ImageTable.doc_id == doc_id).count()
-    
+
+    seq_id = cast(int, doc.seq_id)
+    title = cast(Optional[str], doc.title)
+    file_type_value = cast(Optional[str], doc.file_type)
+    source = cast(Optional[str], doc.source)
+    folder_name_value = cast(Optional[str], doc.folder_name)
+    file_hash = cast(Optional[str], doc.file_hash)
+
     return DocumentInfo(
-        seq_id=doc.seq_id,
-        title=doc.title,
-        file_type=doc.file_type,
-        source=doc.source,
-        folder_name=doc.folder_name,
-        file_hash=doc.file_hash,
+        seq_id=seq_id,
+        title=title,
+        file_type=file_type_value,
+        source=source,
+        folder_name=folder_name_value,
+        file_hash=file_hash,
         chunk_count=chunk_count,
         image_count=image_count,
     )
@@ -137,41 +163,46 @@ async def get_document(doc_id: int, db: Session = Depends(get_db)):
 # DELETE - 문서 삭제
 # =================================================
 
+
 def _delete_document_internal(doc_id: int, db: Session) -> DeleteResponse:
     """
     내부 삭제 로직 (트랜잭션 내에서 호출)
-    
+
     삭제 순서:
     1. Qdrant 벡터 삭제 (content_id 기반)
     2. 이미지 파일 삭제 (파일시스템)
     3. DB 삭제 (CASCADE로 content, images 자동 삭제)
     """
-    
+
     # 0️⃣ 문서 존재 확인
     doc = db.query(MetaTable).filter(MetaTable.seq_id == doc_id).first()
     if not doc:
-        raise HTTPException(status_code=404, detail=f"문서를 찾을 수 없습니다: {doc_id}")
-    
+        raise HTTPException(
+            status_code=404, detail=f"문서를 찾을 수 없습니다: {doc_id}"
+        )
+
     # 1️⃣ content_id 목록 조회 (Qdrant 삭제용)
-    contents = db.query(ContentTable.content_id).filter(ContentTable.doc_id == doc_id).all()
+    contents = (
+        db.query(ContentTable.content_id).filter(ContentTable.doc_id == doc_id).all()
+    )
     content_ids = [c.content_id for c in contents]
     deleted_chunks = len(content_ids)
-    
+
     # 2️⃣ 이미지 정보 조회
     images = db.query(ImageTable).filter(ImageTable.doc_id == doc_id).all()
     deleted_images = len(images)
-    
+
     # 3️⃣ Qdrant 벡터 삭제
     deleted_vectors = 0
     if content_ids:
         try:
             model_key = os.getenv("MODEL_KEY")
             base_collection = os.getenv("BASE_COLLECTION", "documents")
-            
+
             if model_key:
                 collection_name = resolve_collection_name(base_collection, model_key)
                 client = get_qdrant_client()
-                
+
                 # 포인트 ID로 삭제 (content_id가 point id)
                 # qdrant-client 1.16+ uses PointIdsList model
                 client.delete(
@@ -179,10 +210,12 @@ def _delete_document_internal(doc_id: int, db: Session) -> DeleteResponse:
                     points_selector=PointIdsList(points=content_ids),
                 )
                 deleted_vectors = len(content_ids)
-                logger.info(f"[DELETE] Qdrant vectors deleted: {deleted_vectors} from {collection_name}")
+                logger.info(
+                    f"[DELETE] Qdrant vectors deleted: {deleted_vectors} from {collection_name}"
+                )
         except Exception as e:
             logger.warning(f"[DELETE] Qdrant deletion failed (continuing): {e}")
-    
+
     # 4️⃣ 이미지 파일 삭제 (파일시스템)
     image_dir = f"images/{doc_id}"
     if os.path.exists(image_dir):
@@ -191,13 +224,15 @@ def _delete_document_internal(doc_id: int, db: Session) -> DeleteResponse:
             logger.info(f"[DELETE] Image directory removed: {image_dir}")
         except Exception as e:
             logger.warning(f"[DELETE] Image directory removal failed: {e}")
-    
+
     # 5️⃣ DB 삭제 (meta 삭제 → content, images CASCADE 삭제)
     db.delete(doc)
     db.commit()
-    
-    logger.info(f"[DELETE] Document deleted: doc_id={doc_id}, chunks={deleted_chunks}, images={deleted_images}, vectors={deleted_vectors}")
-    
+
+    logger.info(
+        f"[DELETE] Document deleted: doc_id={doc_id}, chunks={deleted_chunks}, images={deleted_images}, vectors={deleted_vectors}"
+    )
+
     return DeleteResponse(
         success=True,
         doc_id=doc_id,
@@ -212,7 +247,7 @@ def _delete_document_internal(doc_id: int, db: Session) -> DeleteResponse:
 async def delete_document(doc_id: int, db: Session = Depends(get_db)):
     """
     단일 문서 삭제
-    
+
     삭제 항목:
     - DB: meta_table, content_table, images (CASCADE)
     - Qdrant: 해당 문서의 모든 벡터
@@ -222,45 +257,53 @@ async def delete_document(doc_id: int, db: Session = Depends(get_db)):
 
 
 class BatchDeleteRequest(BaseModel):
-    doc_ids: list[int] = Field(..., min_length=1, max_length=100, description="삭제할 문서 ID 목록")
+    doc_ids: list[int] = Field(
+        ..., min_length=1, max_length=100, description="삭제할 문서 ID 목록"
+    )
 
 
 @router.post("/batch-delete", response_model=BatchDeleteResponse)
-async def batch_delete_documents(req: BatchDeleteRequest, db: Session = Depends(get_db)):
+async def batch_delete_documents(
+    req: BatchDeleteRequest, db: Session = Depends(get_db)
+):
     """
     여러 문서 일괄 삭제
-    
+
     - 최대 100개까지 한번에 삭제 가능
     - 일부 실패해도 나머지는 계속 처리
     """
     results = []
     failed = []
-    
+
     for doc_id in req.doc_ids:
         try:
             result = _delete_document_internal(doc_id, db)
             results.append(result)
         except HTTPException as e:
             failed.append(doc_id)
-            results.append(DeleteResponse(
-                success=False,
-                doc_id=doc_id,
-                deleted_chunks=0,
-                deleted_images=0,
-                deleted_vectors=0,
-                message=str(e.detail),
-            ))
+            results.append(
+                DeleteResponse(
+                    success=False,
+                    doc_id=doc_id,
+                    deleted_chunks=0,
+                    deleted_images=0,
+                    deleted_vectors=0,
+                    message=str(e.detail),
+                )
+            )
         except Exception as e:
             failed.append(doc_id)
-            results.append(DeleteResponse(
-                success=False,
-                doc_id=doc_id,
-                deleted_chunks=0,
-                deleted_images=0,
-                deleted_vectors=0,
-                message=str(e),
-            ))
-    
+            results.append(
+                DeleteResponse(
+                    success=False,
+                    doc_id=doc_id,
+                    deleted_chunks=0,
+                    deleted_images=0,
+                    deleted_vectors=0,
+                    message=str(e),
+                )
+            )
+
     return BatchDeleteResponse(
         success=len(failed) == 0,
         total_requested=len(req.doc_ids),
@@ -274,6 +317,7 @@ async def batch_delete_documents(req: BatchDeleteRequest, db: Session = Depends(
 # DELETE by folder
 # =================================================
 
+
 @router.delete("/folder/{folder_name}", response_model=BatchDeleteResponse)
 async def delete_by_folder(folder_name: str, db: Session = Depends(get_db)):
     """
@@ -281,10 +325,12 @@ async def delete_by_folder(folder_name: str, db: Session = Depends(get_db)):
     """
     docs = db.query(MetaTable.seq_id).filter(MetaTable.folder_name == folder_name).all()
     doc_ids = [d.seq_id for d in docs]
-    
+
     if not doc_ids:
-        raise HTTPException(status_code=404, detail=f"해당 폴더에 문서가 없습니다: {folder_name}")
-    
+        raise HTTPException(
+            status_code=404, detail=f"해당 폴더에 문서가 없습니다: {folder_name}"
+        )
+
     # batch delete 재사용
     req = BatchDeleteRequest(doc_ids=doc_ids)
     return await batch_delete_documents(req, db)

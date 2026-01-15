@@ -2,7 +2,8 @@
 
 import os
 import logging
-from typing import Optional
+from typing import Any, Optional, cast
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -20,12 +21,17 @@ router = APIRouter(prefix="/search", tags=["search"])
 # Request / Response Models
 # =================================================
 
+
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="검색 쿼리")
     top_k: int = Field(default=5, ge=1, le=100, description="반환할 결과 수")
     folder_name: Optional[str] = Field(default=None, description="폴더명 필터")
-    file_type: Optional[str] = Field(default=None, description="파일타입 필터 (pdf, docx 등)")
-    score_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="최소 유사도 점수")
+    file_type: Optional[str] = Field(
+        default=None, description="파일타입 필터 (pdf, docx 등)"
+    )
+    score_threshold: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="최소 유사도 점수"
+    )
 
 
 class SearchResult(BaseModel):
@@ -51,27 +57,30 @@ class SearchResponse(BaseModel):
 # Search API
 # =================================================
 
+
 @router.post("", response_model=SearchResponse)
 async def search_documents(req: SearchRequest):
     """
     벡터 유사도 검색
-    
+
     - query: 검색할 텍스트
     - top_k: 반환할 결과 수 (기본 5)
     - folder_name: 특정 폴더 내 검색 (선택)
     - file_type: 특정 파일타입 필터 (선택)
     - score_threshold: 최소 유사도 점수 (선택)
     """
-    
+
     # -------------------------------------------------
     # 1️⃣ 환경 변수에서 설정 로드
     # -------------------------------------------------
     model_key = os.getenv("MODEL_KEY")
     base_collection = os.getenv("BASE_COLLECTION", "documents")
-    
+
     if not model_key:
-        raise HTTPException(status_code=500, detail="MODEL_KEY 환경변수가 설정되지 않았습니다")
-    
+        raise HTTPException(
+            status_code=500, detail="MODEL_KEY 환경변수가 설정되지 않았습니다"
+        )
+
     # -------------------------------------------------
     # 2️⃣ 쿼리 임베딩
     # -------------------------------------------------
@@ -80,36 +89,34 @@ async def search_documents(req: SearchRequest):
     except Exception as e:
         logger.error(f"[SEARCH] embedding failed: {e}")
         raise HTTPException(status_code=500, detail=f"임베딩 실패: {str(e)}")
-    
+
     # -------------------------------------------------
     # 3️⃣ Qdrant 검색
     # -------------------------------------------------
     collection_name = resolve_collection_name(base_collection, model_key)
     client = get_qdrant_client()
-    
+
     # 필터 구성 (qdrant-client 1.16+ API)
     query_filter = None
     must_conditions = []
-    
+
     if req.folder_name:
         must_conditions.append(
             FieldCondition(
-                key="metadata.folder_name",
-                match=MatchValue(value=req.folder_name)
+                key="metadata.folder_name", match=MatchValue(value=req.folder_name)
             )
         )
-    
+
     if req.file_type:
         must_conditions.append(
             FieldCondition(
-                key="metadata.file_type", 
-                match=MatchValue(value=req.file_type)
+                key="metadata.file_type", match=MatchValue(value=req.file_type)
             )
         )
-    
+
     if must_conditions:
         query_filter = Filter(must=must_conditions)
-    
+
     try:
         # qdrant-client 1.16+ uses query_points instead of search
         search_result = client.query_points(
@@ -125,7 +132,7 @@ async def search_documents(req: SearchRequest):
     except Exception as e:
         logger.error(f"[SEARCH] qdrant search failed: {e}")
         raise HTTPException(status_code=500, detail=f"검색 실패: {str(e)}")
-    
+
     # -------------------------------------------------
     # 4️⃣ 결과 변환
     # -------------------------------------------------
@@ -133,22 +140,24 @@ async def search_documents(req: SearchRequest):
     for hit in points:
         payload = hit.payload or {}
         metadata = payload.get("metadata", {})
-        
-        results.append(SearchResult(
-            content_id=metadata.get("content_id", hit.id),
-            doc_id=metadata.get("doc_id", 0),
-            page_no=metadata.get("page_no", 0),
-            chunk_no=metadata.get("chunk_no", 0),
-            content=payload.get("content", ""),
-            score=hit.score,
-            title=metadata.get("title"),
-            folder_name=metadata.get("folder_name"),
-            file_type=metadata.get("file_type"),
-            source=metadata.get("source"),
-        ))
-    
+
+        results.append(
+            SearchResult(
+                content_id=metadata.get("content_id", hit.id),
+                doc_id=metadata.get("doc_id", 0),
+                page_no=metadata.get("page_no", 0),
+                chunk_no=metadata.get("chunk_no", 0),
+                content=payload.get("content", ""),
+                score=hit.score,
+                title=metadata.get("title"),
+                folder_name=metadata.get("folder_name"),
+                file_type=metadata.get("file_type"),
+                source=metadata.get("source"),
+            )
+        )
+
     logger.info(f"[SEARCH] query='{req.query[:50]}...' results={len(results)}")
-    
+
     return SearchResponse(
         query=req.query,
         total=len(results),
@@ -164,9 +173,7 @@ async def list_collections():
     try:
         client = get_qdrant_client()
         collections = client.get_collections()
-        return {
-            "collections": [c.name for c in collections.collections]
-        }
+        return {"collections": [c.name for c in collections.collections]}
     except Exception as e:
         logger.error(f"[SEARCH] list collections failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -178,19 +185,28 @@ async def get_collection_info(collection_name: str):
     특정 컬렉션의 상세 정보 조회
     """
     try:
-        client = get_qdrant_client()
+        client = cast(Any, get_qdrant_client())
         info = client.get_collection(collection_name)
-        
+
         # qdrant-client 1.16+ API compatibility
         vectors_config = info.config.params.vectors
+        if isinstance(vectors_config, dict):
+            vector_params = next(iter(vectors_config.values()), None)
+        else:
+            vector_params = vectors_config
+
+        vector_size = getattr(vector_params, "size", None)
+        distance = getattr(vector_params, "distance", None)
+
         return {
             "name": collection_name,
             "vectors_count": info.indexed_vectors_count,
             "points_count": info.points_count,
             "status": str(info.status),
-            "vector_size": vectors_config.size,
-            "distance": str(vectors_config.distance),
+            "vector_size": vector_size,
+            "distance": str(distance) if distance is not None else None,
         }
+
     except Exception as e:
         logger.error(f"[SEARCH] get collection info failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
